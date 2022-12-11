@@ -1,0 +1,165 @@
+package parsers
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/mhrivnak/twgproxy/pkg/bot/events"
+	"github.com/mhrivnak/twgproxy/pkg/models"
+)
+
+func NewPlanetParser(data *models.Data, broker *events.Broker) Parser {
+	return &parsePlanet{
+		data:   data,
+		broker: broker,
+	}
+}
+
+type parsePlanet struct {
+	lines  []string
+	data   *models.Data
+	broker *events.Broker
+}
+
+var planetInfo *regexp.Regexp = regexp.MustCompile(`^Planet #([0-9]+) in sector ([0-9]+): (.+)`)
+var classInfo *regexp.Regexp = regexp.MustCompile(`^Class ([A-Z])`)
+var fuelInfo *regexp.Regexp = regexp.MustCompile(`^Fuel Ore +?([0-9,]+) +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) `)
+var orgInfo *regexp.Regexp = regexp.MustCompile(`^Organics +?([0-9,]+) +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) `)
+var equInfo *regexp.Regexp = regexp.MustCompile(`^Equipment +?([0-9,]+) +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) `)
+var citatelInfo *regexp.Regexp = regexp.MustCompile(`^Planet has a level ([0-6]) Citadel`)
+var figsInfo *regexp.Regexp = regexp.MustCompile(`^Fighters +?N/A +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) `)
+
+func (p *parsePlanet) Parse(line string) error {
+	p.lines = append(p.lines, line)
+	return nil
+}
+
+func (p *parsePlanet) Done() bool {
+	length := len(p.lines)
+	if length < 10 {
+		return false
+	}
+
+	if !strings.HasPrefix(p.lines[length-1], "Fighters") {
+		return false
+	}
+
+	p.finalize()
+
+	return true
+}
+
+func (p *parsePlanet) finalize() {
+	planet := models.Planet{}
+	for _, line := range p.lines {
+		switch {
+		case strings.HasPrefix(line, "Planet #"):
+			parts := planetInfo.FindStringSubmatch(line)
+			if len(parts) != 4 {
+				continue
+			}
+			id, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			sector, err := strconv.Atoi(parts[2])
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet = models.Planet{
+				ID:     id,
+				Sector: sector,
+				Name:   strings.TrimSpace(parts[3]),
+			}
+		case strings.HasPrefix(line, "Class "):
+			parts := classInfo.FindStringSubmatch(line)
+			if len(parts) != 2 {
+				continue
+			}
+			planet.Class = parts[1]
+		case strings.HasPrefix(line, "Fuel Ore"):
+			parts := fuelInfo.FindStringSubmatch(line)
+			if len(parts) != 3 {
+				continue
+			}
+			fuel, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.Fuel = fuel
+			cols, err := strconv.Atoi(removeCommas(parts[1]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.FuelCols = cols
+		case strings.HasPrefix(line, "Organics"):
+			parts := orgInfo.FindStringSubmatch(line)
+			if len(parts) != 3 {
+				continue
+			}
+			org, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.Org = org
+			cols, err := strconv.Atoi(removeCommas(parts[1]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.OrgCols = cols
+		case strings.HasPrefix(line, "Equipment"):
+			parts := equInfo.FindStringSubmatch(line)
+			if len(parts) != 3 {
+				continue
+			}
+			equ, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.Equ = equ
+			cols, err := strconv.Atoi(removeCommas(parts[1]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.EquCols = cols
+		// FIXME this won't work until we can recogniz the planet command prompt
+		case strings.HasPrefix(line, "Planet has a level "):
+			parts := citatelInfo.FindStringSubmatch(line)
+			if len(parts) != 2 {
+				continue
+			}
+			level, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.Level = level
+		case strings.HasPrefix(line, "Fighters "):
+			parts := figsInfo.FindStringSubmatch(line)
+			if len(parts) != 2 {
+				continue
+			}
+			figs, err := strconv.Atoi(removeCommas(parts[1]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.Figs = figs
+		}
+	}
+	p.data.Planets[planet.ID] = planet
+	p.broker.Publish(&events.Event{
+		Kind: events.PLANETDISPLAY,
+		ID:   fmt.Sprint(planet.ID),
+	})
+}
