@@ -24,7 +24,7 @@ type ParseSector struct {
 }
 
 var sectorInfo *regexp.Regexp = regexp.MustCompile(`^Sector  : (\d+)`)
-var portType *regexp.Regexp = regexp.MustCompile(`^Ports   : \w, Class \d \(([SB]{3})\)`)
+var portType *regexp.Regexp = regexp.MustCompile(`^Ports   : [a-zA-Z ]+, Class \d \(([SB]{3})\)`)
 var figInfo *regexp.Regexp = regexp.MustCompile(`^Fighters: ([0-9,]+) \((.+?)\) \[([A-Za-z]+)\]`)
 var minesInfo *regexp.Regexp = regexp.MustCompile(`^Mines   : ([0-9]+) \(Type 1 Armid\) \(([A-Za-z ]+)\)`)
 

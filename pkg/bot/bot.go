@@ -81,7 +81,7 @@ func (b *Bot) Start(done chan<- interface{}) {
 		for {
 			char := <-input
 			switch int(char) {
-			case 47: // "/"
+			case 92: // "\"
 				data = []byte{char}
 			case 27: // ESC
 				data = []byte{}
@@ -147,8 +147,13 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 		}
 		return actions.NewMove(dest, b.Broker, b.data, b.SendCommand)
 	case []byte("i")[0]:
-		if len(command) < 3 {
-			fmt.Println("Unable to parse info command: incomplete")
+		if len(command) == 1 {
+			j, err := json.Marshal(b.data.Status)
+			if err != nil {
+				fmt.Println("failed to marshal Sector")
+				return nil
+			}
+			fmt.Println(string(j))
 			return nil
 		}
 		switch command[1] {
@@ -187,6 +192,12 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			fmt.Println(string(j))
 		}
+	case []byte("r")[0]:
+		if len(command) > 1 {
+			fmt.Println("got extra args for rob command")
+			return nil
+		}
+		return actions.NewRob(b.Broker, b.data, b.SendCommand)
 	}
 	return nil
 }
@@ -208,6 +219,10 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.ROUTEINFO] = parsers.NewRouteParser(b.Broker)
 	case strings.HasPrefix(clean, "Planet #"):
 		b.parsers[parsers.PLANETINFO] = parsers.NewPlanetParser(b.data, b.Broker)
+	case strings.HasPrefix(clean, "The Trade Journals estimate this port has"):
+		b.parsers[parsers.PORTROBINFO] = parsers.NewPortRobParser(b.data, b.Broker)
+	case strings.HasPrefix(clean, " Sect "):
+		b.parsers[parsers.QUICKSTATS] = parsers.NewQuickStatsParser(b.data, b.Broker)
 	}
 
 	for k, parser := range b.parsers {

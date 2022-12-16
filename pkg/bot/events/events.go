@@ -1,17 +1,22 @@
 package events
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 const (
 	PLANETDISPLAY = "planet display"
+	PORTROBCREDS  = "port rob creds"
 	ROUTEDISPLAY  = "route display"
 	SECTORDISPLAY = "sector display"
 )
 
 type Event struct {
-	Kind string
-	ID   string
-	Data string
+	Kind    string
+	ID      string
+	Data    string
+	DataInt int
 }
 
 type wait struct {
@@ -30,6 +35,7 @@ func (b *Broker) Publish(e *Event) {
 	waits := b.getWaits(e.Kind, e.ID)
 	for _, w := range waits {
 		w.c <- e
+		fmt.Println("Published event Kind: " + e.Kind)
 	}
 }
 

@@ -11,7 +11,8 @@ type Sector struct {
 }
 
 type Port struct {
-	Type string
+	Type  string
+	Creds int
 }
 
 func (s *Sector) IsSafe() bool {

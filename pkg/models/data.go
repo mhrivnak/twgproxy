@@ -14,5 +14,10 @@ func NewData() *Data {
 }
 
 type Status struct {
-	Sector int
+	Creds   int
+	Exp     int
+	Figs    int
+	Sector  int
+	Shields int
+	Holds   int
 }
