@@ -6,11 +6,12 @@ import (
 )
 
 const (
-	PLANETDISPLAY = "planet display"
-	PORTROBCREDS  = "port rob creds"
-	ROUTEDISPLAY  = "route display"
-	SECTORDISPLAY = "sector display"
-	PROMPTDISPLAY = "prompt display"
+	PLANETDISPLAY         = "planet display"
+	PORTROBCREDS          = "port rob creds"
+	ROUTEDISPLAY          = "route display"
+	SECTORDISPLAY         = "sector display"
+	PROMPTDISPLAY         = "prompt display"
+	CORPPLANETLISTDISPLAY = "corp planet list display"
 
 	COMMANDPROMPT    = "command prompt"
 	COMPUTERPROMPT   = "computer prompt"

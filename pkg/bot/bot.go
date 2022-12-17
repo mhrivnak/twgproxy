@@ -247,6 +247,8 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.PORTROBINFO] = parsers.NewPortRobParser(b.data, b.Broker)
 	case strings.HasPrefix(clean, " Sect "):
 		b.parsers[parsers.QUICKSTATS] = parsers.NewQuickStatsParser(b.data, b.Broker)
+	case strings.Contains(clean, "Corporate Planet Scan"):
+		b.parsers[parsers.QUICKSTATS] = parsers.NewCorpPlanetsParser(b.data, b.Broker)
 	}
 
 	for k, parser := range b.parsers {

@@ -8,6 +8,7 @@ const (
 	PLANETINFO  = "planet info"
 	PORTROBINFO = "port rob info"
 	QUICKSTATS  = "quick stats"
+	CORPPLANETS = "corp planet display"
 )
 
 type Parser interface {

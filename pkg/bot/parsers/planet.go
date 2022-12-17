@@ -90,7 +90,7 @@ func (p *parsePlanet) finalize() {
 				fmt.Println(err.Error())
 				return
 			}
-			planet.Fuel = fuel
+			planet.Ore = fuel
 			cols, err := strconv.Atoi(removeCommas(parts[1]))
 			if err != nil {
 				fmt.Println(err.Error())
