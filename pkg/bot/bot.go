@@ -266,13 +266,13 @@ func (b *Bot) checkForPrompt(line string) {
 		return
 	}
 
-	var e *events.Event
+	e := events.Event{
+		Kind: events.PROMPTDISPLAY,
+	}
 
 	switch clean[:12] {
 	case "Command [TL=":
-		e = &events.Event{
-			Kind: events.COMMANDPROMPT,
-		}
+		e.ID = events.COMMANDPROMPT
 		parts := promptSector.FindStringSubmatch(clean)
 		if len(parts) != 2 {
 			break
@@ -284,12 +284,20 @@ func (b *Bot) checkForPrompt(line string) {
 		}
 		b.data.Status.Sector = sector
 	case "Planet comma":
-		e = &events.Event{
-			Kind: events.PLANETPROMPT,
-		}
+		e.ID = events.PLANETPROMPT
+	case "Computer com":
+		e.ID = events.COMPUTERPROMPT
+	case "Corporate co":
+		e.ID = events.CORPPROMPT
+	case "Citadel comm":
+		e.ID = events.CITADELPROMPT
+	case "<StarDock> W":
+		e.ID = events.STARDOCKPROMPT
+	case "<Shipyards> ":
+		e.ID = events.SHIPYARDPROMPT
 	}
-	if e != nil {
-		b.Broker.Publish(e)
+	if e.ID != "" {
+		b.Broker.Publish(&e)
 	}
 }
 

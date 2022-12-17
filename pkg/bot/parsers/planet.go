@@ -18,7 +18,7 @@ func NewPlanetParser(data *models.Data, broker *events.Broker) Parser {
 	}
 
 	go func() {
-		<-broker.WaitFor(context.TODO(), events.PLANETPROMPT, "")
+		<-broker.WaitFor(context.TODO(), events.PROMPTDISPLAY, events.PLANETPROMPT)
 		p.done = true
 		p.finalize()
 	}()
