@@ -41,6 +41,7 @@ func New(game, user io.Reader, command io.Writer) *Bot {
 var ansiPattern *regexp.Regexp = regexp.MustCompile("\x1b\\[.*?m")
 
 var warping *regexp.Regexp = regexp.MustCompile(`Warping to Sector (\d+)`)
+var promptSector *regexp.Regexp = regexp.MustCompile(`\[([0-9]+)\] `)
 
 func byteChan(r io.Reader) <-chan byte {
 	c := make(chan byte)
@@ -62,18 +63,41 @@ func byteChan(r io.Reader) <-chan byte {
 
 func (b *Bot) Start(done chan<- interface{}) {
 	go func() {
-		// parse game
-		scanner := bufio.NewScanner(b.gameReader)
-		for scanner.Scan() {
-			b.ParseLine(scanner.Text())
+		defer close(done)
+
+		buf := bufio.NewReader(b.gameReader)
+		var err error
+		var line []byte
+		var alreadyCheckedForPrompt bool
+		for {
+			line = make([]byte, 200)
+		loop:
+			for i := 0; i < 200; i++ {
+				line[i], err = buf.ReadByte()
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+				switch int(line[i]) {
+				case 10: // \n
+					b.ParseLine(string(line[:i]))
+					break loop
+				case 63: // ?
+					if alreadyCheckedForPrompt {
+						continue
+					}
+					b.checkForPrompt(string(line[:i+1]))
+					alreadyCheckedForPrompt = true
+				}
+			}
+			alreadyCheckedForPrompt = false
 		}
-		if err := scanner.Err(); err != nil {
-			fmt.Println(err.Error())
-		}
-		done <- struct{}{}
+
 	}()
 
 	go func() {
+		defer close(done)
+
 		// parse user input
 		input := byteChan(b.userReader)
 
@@ -233,6 +257,39 @@ func (b *Bot) ParseLine(line string) {
 		if parser.Done() {
 			delete(b.parsers, k)
 		}
+	}
+}
+
+func (b *Bot) checkForPrompt(line string) {
+	clean := ansiPattern.ReplaceAllString(line, "")
+	if len(clean) < 12 {
+		return
+	}
+
+	var e *events.Event
+
+	switch clean[:12] {
+	case "Command [TL=":
+		e = &events.Event{
+			Kind: events.COMMANDPROMPT,
+		}
+		parts := promptSector.FindStringSubmatch(clean)
+		if len(parts) != 2 {
+			break
+		}
+		sector, err := strconv.Atoi(parts[1])
+		if err != nil {
+			fmt.Printf("failed to parse sector from prompt: %s\n", err.Error())
+			break
+		}
+		b.data.Status.Sector = sector
+	case "Planet comma":
+		e = &events.Event{
+			Kind: events.PLANETPROMPT,
+		}
+	}
+	if e != nil {
+		b.Broker.Publish(e)
 	}
 }
 

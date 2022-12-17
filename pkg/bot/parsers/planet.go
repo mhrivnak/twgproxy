@@ -1,6 +1,7 @@
 package parsers
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -11,16 +12,25 @@ import (
 )
 
 func NewPlanetParser(data *models.Data, broker *events.Broker) Parser {
-	return &parsePlanet{
+	p := parsePlanet{
 		data:   data,
 		broker: broker,
 	}
+
+	go func() {
+		<-broker.WaitFor(context.TODO(), events.PLANETPROMPT, "")
+		p.done = true
+		p.finalize()
+	}()
+
+	return &p
 }
 
 type parsePlanet struct {
 	lines  []string
 	data   *models.Data
 	broker *events.Broker
+	done   bool
 }
 
 var planetInfo *regexp.Regexp = regexp.MustCompile(`^Planet #([0-9]+) in sector ([0-9]+): (.+)`)
@@ -37,18 +47,7 @@ func (p *parsePlanet) Parse(line string) error {
 }
 
 func (p *parsePlanet) Done() bool {
-	length := len(p.lines)
-	if length < 10 {
-		return false
-	}
-
-	if !strings.HasPrefix(p.lines[length-1], "Fighters") {
-		return false
-	}
-
-	p.finalize()
-
-	return true
+	return p.done
 }
 
 func (p *parsePlanet) finalize() {
@@ -132,7 +131,6 @@ func (p *parsePlanet) finalize() {
 				return
 			}
 			planet.EquCols = cols
-		// FIXME this won't work until we can recogniz the planet command prompt
 		case strings.HasPrefix(line, "Planet has a level "):
 			parts := citatelInfo.FindStringSubmatch(line)
 			if len(parts) != 2 {

@@ -10,6 +10,10 @@ const (
 	PORTROBCREDS  = "port rob creds"
 	ROUTEDISPLAY  = "route display"
 	SECTORDISPLAY = "sector display"
+
+	COMMANDPROMPT  = "command prompt"
+	COMPUTERPROMPT = "computer prompt"
+	PLANETPROMPT   = "planet prompt"
 )
 
 type Event struct {
@@ -32,10 +36,11 @@ type Broker struct {
 }
 
 func (b *Broker) Publish(e *Event) {
+	fmt.Println("Publishing event Kind: " + e.Kind)
 	waits := b.getWaits(e.Kind, e.ID)
 	for _, w := range waits {
 		w.c <- e
-		fmt.Println("Published event Kind: " + e.Kind)
+		fmt.Println("sent event to listener")
 	}
 }
 
