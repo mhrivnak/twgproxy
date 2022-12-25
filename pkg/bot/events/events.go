@@ -12,7 +12,10 @@ const (
 	SECTORDISPLAY         = "sector display"
 	PROMPTDISPLAY         = "prompt display"
 	CORPPLANETLISTDISPLAY = "corp planet list display"
+	MBOTTRADEDONE         = "MoM bot trade done"
+	MBOTNOTHINGTOSELL     = "MoM bot nothing to sell"
 
+	// prompts
 	COMMANDPROMPT    = "command prompt"
 	COMPUTERPROMPT   = "computer prompt"
 	PLANETPROMPT     = "planet prompt"

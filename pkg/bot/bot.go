@@ -249,6 +249,10 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.QUICKSTATS] = parsers.NewQuickStatsParser(b.data, b.Broker)
 	case strings.Contains(clean, "Corporate Planet Scan"):
 		b.parsers[parsers.QUICKSTATS] = parsers.NewCorpPlanetsParser(b.data, b.Broker)
+	case strings.Contains(clean, "[General] {cbot} - Done with port"):
+		b.Broker.Publish(&events.Event{Kind: events.MBOTTRADEDONE})
+	case strings.Contains(clean, "[General] {cbot} - Nothing to sell"):
+		b.Broker.Publish(&events.Event{Kind: events.MBOTNOTHINGTOSELL})
 	}
 
 	for k, parser := range b.parsers {

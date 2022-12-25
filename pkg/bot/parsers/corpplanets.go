@@ -24,7 +24,7 @@ type ParseCorpPlanetsDisplay struct {
 }
 
 var corpPlanetListLine0 *regexp.Regexp = regexp.MustCompile(`(\d+)[ T]+#(\d+).*?Class ([A-Z]), `)
-var corpPlanetListLine1 *regexp.Regexp = regexp.MustCompile(`\([0-9M-]+\) +[0-9T]+ +[0-9T]+ +[0-9T]+ +([0-9MT]+) +([0-9MT]+) +([0-9MT]+) +([0-9MT]+)`)
+var corpPlanetListLine1 *regexp.Regexp = regexp.MustCompile(`\([0-9MT-]+\) +[0-9T]+ +[0-9T]+ +[0-9T]+ +([0-9MT]+) +([0-9MT]+) +([0-9MT]+) +([0-9MT]+)`)
 
 func (p *ParseCorpPlanetsDisplay) Parse(line string) error {
 	p.lines = append(p.lines, line)
@@ -63,7 +63,8 @@ func (p *ParseCorpPlanetsDisplay) finalize() {
 		}
 		parts1 := corpPlanetListLine1.FindStringSubmatch(lines[i+1])
 		if len(parts1) != 5 {
-			fmt.Println("error parsing line 1 of planet entry")
+			fmt.Printf("error parsing line 1 of planet entry: got %d parts\n", len(parts1))
+			fmt.Println(lines[i+1])
 			return
 		}
 		pid, err := strconv.Atoi(parts0[2])
