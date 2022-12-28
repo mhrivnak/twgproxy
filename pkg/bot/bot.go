@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actions"
+	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/bot/parsers"
 	"github.com/mhrivnak/twgproxy/pkg/models"
@@ -23,17 +24,22 @@ type Bot struct {
 	commandWriter io.Writer
 	parsers       map[string]parsers.Parser
 	data          *models.Data
+	Actuator      actuator.Actuator
 	Broker        *events.Broker
 }
 
 func New(game, user io.Reader, command io.Writer) *Bot {
+	data := models.NewData()
+	broker := &events.Broker{}
+
 	return &Bot{
 		gameReader:    game,
 		userReader:    user,
 		commandWriter: command,
 		parsers:       map[string]parsers.Parser{},
-		data:          models.NewData(),
-		Broker:        &events.Broker{},
+		data:          data,
+		Broker:        broker,
+		Actuator:      *actuator.New(broker, data, command),
 	}
 }
 
@@ -52,6 +58,10 @@ func byteChan(r io.Reader) <-chan byte {
 			char, err := buf.ReadByte()
 			fmt.Println(string(char))
 			if err != nil {
+				if err == io.EOF {
+					fmt.Println("EOF from user client")
+					return
+				}
 				fmt.Println(err.Error())
 				continue
 			}
@@ -82,6 +92,8 @@ func (b *Bot) Start(done chan<- interface{}) {
 				case 10: // \n
 					b.ParseLine(string(line[:i]))
 					break loop
+				case 62: // >
+					b.checkForMombotPrompt(string(line[:i+1]))
 				case 63: // ?
 					if alreadyCheckedForPrompt {
 						continue
@@ -142,17 +154,16 @@ func (b *Bot) Start(done chan<- interface{}) {
 				} else {
 					_, err := b.commandWriter.Write([]byte{char})
 					if err != nil {
+						if err == io.EOF {
+							fmt.Println("lost connection to user client")
+							return
+						}
 						fmt.Println(err.Error())
 					}
 				}
 			}
 		}
 	}()
-}
-
-func (b *Bot) SendCommand(command string) error {
-	_, err := b.commandWriter.Write([]byte(command))
-	return err
 }
 
 func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
@@ -163,13 +174,23 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 	}
 
 	switch command[0] {
+	case []byte("n")[0]:
+		if len(command) == 2 {
+			product, err := actions.ProductTypeFromChar(string(command[1]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return nil
+			}
+			return actions.NewPTrade(0, product, &b.Actuator)
+		}
+
 	case []byte("m")[0]:
 		dest, err := strconv.Atoi(string(command[1:]))
 		if err != nil {
 			fmt.Printf("failed to parse sector from command %s\n", string(command))
 			return nil
 		}
-		return actions.NewMove(dest, b.Broker, b.data, b.SendCommand)
+		return actions.NewMove(dest, &b.Actuator)
 	case []byte("i")[0]:
 		if len(command) == 1 {
 			j, err := json.Marshal(b.data.Status)
@@ -221,7 +242,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			fmt.Println("got extra args for rob command")
 			return nil
 		}
-		return actions.NewRob(b.Broker, b.data, b.SendCommand)
+		return actions.NewRob(&b.Actuator)
 	}
 	return nil
 }
@@ -304,6 +325,16 @@ func (b *Bot) checkForPrompt(line string) {
 	}
 	if e.ID != "" {
 		b.Broker.Publish(&e)
+	}
+}
+
+func (b *Bot) checkForMombotPrompt(line string) {
+	clean := ansiPattern.ReplaceAllString(line, "")
+	if strings.Contains(clean, "{General} cbot>") {
+		b.Broker.Publish(&events.Event{
+			Kind: events.PROMPTDISPLAY,
+			ID:   events.MOMBOTPROMPT,
+		})
 	}
 }
 

@@ -157,7 +157,8 @@ func (p *parsePlanet) finalize() {
 	}
 	p.data.Planets[planet.ID] = planet
 	p.broker.Publish(&events.Event{
-		Kind: events.PLANETDISPLAY,
-		ID:   fmt.Sprint(planet.ID),
+		Kind:    events.PLANETDISPLAY,
+		ID:      fmt.Sprint(planet.ID),
+		DataInt: planet.ID,
 	})
 }

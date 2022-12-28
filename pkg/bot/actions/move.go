@@ -6,26 +6,22 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
-	"github.com/mhrivnak/twgproxy/pkg/models"
 )
 
 type move struct {
-	dest   int
-	broker *events.Broker
-	data   *models.Data
-	done   chan struct{}
-	send   func(string) error
+	actuator *actuator.Actuator
+	dest     int
+	done     chan struct{}
 }
 
-func NewMove(dest int, broker *events.Broker, data *models.Data, send func(string) error) Action {
+func NewMove(dest int, actuator *actuator.Actuator) Action {
 	done := make(chan struct{})
 	return &move{
-		broker: broker,
-		data:   data,
-		dest:   dest,
-		done:   done,
-		send:   send,
+		actuator: actuator,
+		dest:     dest,
+		done:     done,
 	}
 }
 
@@ -39,11 +35,11 @@ func (m *move) run(ctx context.Context) {
 	sectors := []int{}
 
 	// send commands
-	m.send(fmt.Sprintf("cf\r%d\rq", m.dest))
+	m.actuator.Send(fmt.Sprintf("cf\r%d\rq", m.dest))
 
 	// wait for events
 	select {
-	case e := <-m.broker.WaitFor(ctx, events.ROUTEDISPLAY, ""):
+	case e := <-m.actuator.Broker.WaitFor(ctx, events.ROUTEDISPLAY, ""):
 		fmt.Printf("got route: %s\n", e.Data)
 		var err error
 		sectors, err = parseSectors(e.Data)
@@ -58,11 +54,11 @@ func (m *move) run(ctx context.Context) {
 
 	// ignore the first sector, which is the one we're in
 	for _, sector := range sectors[1:] {
-		m.send("sh")
+		m.actuator.Send("sh")
 
 		select {
-		case <-m.broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector)):
-			sInfo, ok := m.data.Sectors[sector]
+		case <-m.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector)):
+			sInfo, ok := m.actuator.Data.Sectors[sector]
 			if !ok {
 				fmt.Printf("failed to get cached info on sector %d\n", sector)
 				return
@@ -71,7 +67,7 @@ func (m *move) run(ctx context.Context) {
 				fmt.Println("unsafe sector ahead")
 				return
 			}
-			m.send(fmt.Sprintf("%d\r", sector))
+			m.actuator.Send(fmt.Sprintf("%d\r", sector))
 		case <-ctx.Done():
 			return
 		}

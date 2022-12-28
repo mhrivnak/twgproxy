@@ -24,6 +24,7 @@ const (
 	STARDOCKPROMPT   = "stardock prompt"
 	SHIPYARDPROMPT   = "shipyard prompt"
 	HWEMPORIUMPROMPT = "hardware emporium prompt"
+	MOMBOTPROMPT     = "MoM bot prompt"
 )
 
 type Event struct {
