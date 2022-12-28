@@ -5,16 +5,19 @@ import (
 	"fmt"
 )
 
+type EventKind string
+
 const (
-	PLANETDISPLAY         = "planet display"
-	PORTROBCREDS          = "port rob creds"
-	ROUTEDISPLAY          = "route display"
-	SECTORDISPLAY         = "sector display"
-	PROMPTDISPLAY         = "prompt display"
-	CORPPLANETLISTDISPLAY = "corp planet list display"
-	MBOTTRADEDONE         = "MoM bot trade done"
-	MBOTNOTHINGTOSELL     = "MoM bot nothing to sell"
-	FIGHIT                = "fig hit"
+	PLANETDISPLAY         EventKind = "planet display"
+	PORTROBCREDS          EventKind = "port rob creds"
+	ROUTEDISPLAY          EventKind = "route display"
+	SECTORDISPLAY         EventKind = "sector display"
+	PROMPTDISPLAY         EventKind = "prompt display"
+	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
+	MBOTTRADEDONE         EventKind = "MoM bot trade done"
+	MBOTNOTHINGTOSELL     EventKind = "MoM bot nothing to sell"
+	FIGHIT                EventKind = "fig hit"
+	PORTREPORTDISPLAY     EventKind = "port report"
 
 	// prompts
 	COMMANDPROMPT    = "command prompt"
@@ -29,22 +32,24 @@ const (
 )
 
 type Event struct {
-	Kind    string
+	Kind    EventKind
 	ID      string
 	Data    string
 	DataInt int
 }
 
 type wait struct {
-	Kind string
+	Kind EventKind
 	ID   string
 	c    chan<- *Event
 }
 
-type waitMap map[string]wait
+type waitSlice []wait
+
+type waitMap map[string]waitSlice
 
 type Broker struct {
-	waits map[string]waitMap
+	waits map[EventKind]waitMap
 }
 
 func (b *Broker) Publish(e *Event) {
@@ -52,13 +57,13 @@ func (b *Broker) Publish(e *Event) {
 	waits := b.getWaits(e.Kind, e.ID)
 	for _, w := range waits {
 		w.c <- e
-		fmt.Println("sent event to listener")
+		fmt.Printf("sent event to listener Kind: %s, ID: %s\n", w.Kind, w.ID)
 	}
 }
 
-func (b *Broker) WaitFor(ctx context.Context, kind string, id string) <-chan *Event {
+func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan *Event {
 	if b.waits == nil {
-		b.waits = map[string]waitMap{}
+		b.waits = map[EventKind]waitMap{}
 	}
 
 	wm, ok := b.waits[kind]
@@ -70,31 +75,32 @@ func (b *Broker) WaitFor(ctx context.Context, kind string, id string) <-chan *Ev
 	// size 1 so an event can be sent even if the receiver is no longer waiting
 	c := make(chan *Event, 1)
 
-	wm[id] = wait{
+	wm[id] = append(wm[id], wait{
 		Kind: kind,
 		ID:   id,
 		c:    c,
-	}
+	})
 
 	return c
 }
 
-func (b *Broker) getWaits(kind string, id string) []wait {
-	ret := []wait{}
+func (b *Broker) getWaits(kind EventKind, id string) []wait {
+	ret := waitSlice{}
 	wm, ok := b.waits[kind]
 	if !ok {
 		return ret
 	}
 
-	w, ok := wm[id]
+	wSlice, ok := wm[id]
 	if ok {
-		ret = append(ret, w)
+		ret = append(ret, wSlice...)
 		delete(wm, id)
 	}
-	w, ok = wm[""]
+	globalWaitSlice, ok := wm[""]
 	if ok {
-		ret = append(ret, w)
-		delete(wm, id)
+		ret = append(ret, globalWaitSlice...)
+		delete(wm, "")
 	}
+
 	return ret
 }

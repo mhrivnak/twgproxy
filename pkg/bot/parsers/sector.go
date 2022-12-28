@@ -27,6 +27,7 @@ var sectorInfo *regexp.Regexp = regexp.MustCompile(`^Sector  : (\d+)`)
 var portType *regexp.Regexp = regexp.MustCompile(`^Ports   : [a-zA-Z ']+, Class \d \(([SB]{3})\)`)
 var figInfo *regexp.Regexp = regexp.MustCompile(`^Fighters: ([0-9,]+) \((.+?)\) \[([A-Za-z]+)\]`)
 var minesInfo *regexp.Regexp = regexp.MustCompile(`^Mines   : ([0-9]+) \(Type 1 Armid\) \(([A-Za-z ]+)\)`)
+var warpsInfo *regexp.Regexp = regexp.MustCompile(`^Warps to Sector\(s\) :  ([0-9 -]+)`)
 
 func (p *ParseSector) Parse(line string) error {
 	p.lines = append(p.lines, line)
@@ -104,8 +105,31 @@ func (p *ParseSector) finalize() {
 				s.MinesFriendly = true
 			}
 		}
+
+		parts = warpsInfo.FindStringSubmatch(line)
+		if len(parts) == 2 {
+			sectors := strings.Split(parts[1], " - ")
+			for _, sector := range sectors {
+				warp, err := strconv.Atoi(sector)
+				if err != nil {
+					fmt.Printf("failed to parse warp %s: %s", sector, err.Error())
+					return
+				}
+				s.Warps = append(s.Warps, warp)
+			}
+		}
 	}
-	p.data.Sectors[num] = s
+
+	// copy previously-known warps. This helps since holo-scans don't include
+	// warp info.
+	existing, ok := p.data.Sectors[num]
+	if ok {
+		if len(s.Warps) == 0 {
+			s.Warps = existing.Warps
+		}
+	}
+
+	p.data.Sectors[num] = &s
 	p.broker.Publish(&events.Event{
 		Kind: events.SECTORDISPLAY,
 		ID:   fmt.Sprint(s.ID),

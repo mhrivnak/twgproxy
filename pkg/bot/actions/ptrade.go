@@ -38,6 +38,28 @@ func (p *ptrade) run(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		return
+	case e := <-p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, ""):
+		switch e.ID {
+		case events.COMMANDPROMPT:
+			wait := p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.PLANETPROMPT)
+			p.actuator.Land(p.planetID)
+			select {
+			case <-ctx.Done():
+				return
+			case <-wait:
+			}
+		case events.PLANETPROMPT:
+		case events.CITADELPROMPT:
+			p.actuator.Send("q")
+		}
+	}
+
+	// make sure we're on the right planet
+	wait := p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.PLANETPROMPT)
+	p.actuator.Send("\r")
+	select {
+	case <-ctx.Done():
+		return
 	case e := <-p.actuator.Broker.WaitFor(ctx, events.PLANETDISPLAY, ""):
 		if p.planetID != 0 && p.planetID != e.DataInt {
 			p.actuator.Send("q")
@@ -45,11 +67,10 @@ func (p *ptrade) run(ctx context.Context) {
 		} else if p.planetID == 0 {
 			p.planetID = e.DataInt
 		}
-	case <-p.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, ""):
-		p.actuator.Land(p.planetID)
-	case <-p.actuator.Broker.WaitFor(ctx, events.CITADELPROMPT, ""):
-		p.actuator.Send("q")
 	}
+
+	// wait for prompt before invoking mombot
+	<-wait
 
 	p.actuator.MombotSend(ctx, fmt.Sprintf("neg %s\r", ProductCharFromType(p.product)))
 

@@ -81,16 +81,16 @@ func (b *Bot) Start(done chan<- interface{}) {
 		var line []byte
 		var alreadyCheckedForPrompt bool
 		for {
-			line = make([]byte, 200)
+			line = make([]byte, 300)
 		loop:
-			for i := 0; i < 200; i++ {
+			for i := 0; i < 300; i++ {
 				line[i], err = buf.ReadByte()
 				if err != nil {
 					fmt.Println(err.Error())
 					return
 				}
 				switch int(line[i]) {
-				case 10: // \n
+				case 10: // \r
 					b.ParseLine(string(line[:i]))
 					break loop
 				case 58: // :
@@ -177,6 +177,14 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 	}
 
 	switch command[0] {
+	case []byte("p")[0]:
+		if len(command) > 2 && command[1] == []byte("r")[0] {
+			action, err := actions.NewPRouteTrade(string(command[2:]), &b.Actuator)
+			if err != nil {
+				fmt.Printf("failed to run planet route trade: %s\n", err.Error())
+			}
+			return action
+		}
 	case []byte("d")[0]:
 		return actions.NewPDrop(&b.Actuator)
 	case []byte("n")[0]:
@@ -187,6 +195,19 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 				return nil
 			}
 			return actions.NewPTrade(0, product, &b.Actuator)
+		}
+		if len(command) > 2 {
+			pid, err := strconv.Atoi(string(command[2:]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return nil
+			}
+			product, err := actions.ProductTypeFromChar(string(command[1]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return nil
+			}
+			return actions.NewPTrade(pid, product, &b.Actuator)
 		}
 
 	case []byte("m")[0]:
@@ -273,6 +294,15 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.PORTROBINFO] = parsers.NewPortRobParser(b.data, b.Broker)
 	case strings.HasPrefix(clean, " Sect "):
 		b.parsers[parsers.QUICKSTATS] = parsers.NewQuickStatsParser(b.data, b.Broker)
+	case strings.HasPrefix(clean, "What sector is the port in?"):
+		b.parsers[parsers.PORTREPORT] = parsers.NewPortReportParser(b.data, b.Broker)
+	case strings.HasPrefix(clean, "Commerce report"):
+		// a parser might already be in place if this is the result of a deliberate
+		// port report being retrieved from a ship computer.
+		_, ok := b.parsers[parsers.PORTREPORT]
+		if !ok {
+			b.parsers[parsers.PORTREPORT] = parsers.NewPortReportParser(b.data, b.Broker)
+		}
 	case strings.Contains(clean, "Corporate Planet Scan"):
 		b.parsers[parsers.QUICKSTATS] = parsers.NewCorpPlanetsParser(b.data, b.Broker)
 	case strings.Contains(clean, "[General] {cbot} - Done with port"):

@@ -8,12 +8,31 @@ type Sector struct {
 	Mines         int
 	MinesFriendly bool
 	Port          *Port
+	Warps         []int
 }
 
 type Port struct {
-	Type  string
-	Creds int
+	Type   string
+	Creds  int
+	Report *PortReport
 }
+
+type PortReport struct {
+	Fuel PortItem
+	Org  PortItem
+	Equ  PortItem
+}
+
+type PortItem struct {
+	Status  PortItemStatus
+	Trading int
+	Percent int
+}
+
+type PortItemStatus string
+
+const BUYING PortItemStatus = "buying"
+const SELLING PortItemStatus = "selling"
 
 func (s *Sector) IsSafe() bool {
 	switch {

@@ -79,7 +79,7 @@ func (p *ParseCorpPlanetsDisplay) finalize() {
 		}
 		planet, ok := p.data.Planets[pid]
 		if !ok {
-			planet = models.Planet{
+			planet = &models.Planet{
 				ID:    pid,
 				Class: parts0[3],
 			}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
@@ -41,4 +43,69 @@ func (a *Actuator) MombotSend(ctx context.Context, command string) {
 		break
 	}
 	a.Send(command)
+}
+
+func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
+	current := a.Data.Sectors[a.Data.Status.Sector]
+	for _, warp := range current.Warps {
+		if warp == sector {
+			// no need to plot a route if the destination is next door
+			return []int{current.ID, sector}, nil
+		}
+	}
+
+	// send commands
+	a.Send(fmt.Sprintf("cf\r%d\rq", sector))
+
+	// wait for events
+	select {
+	case <-ctx.Done():
+		break
+	case e := <-a.Broker.WaitFor(ctx, events.ROUTEDISPLAY, ""):
+		fmt.Printf("got route: %s\n", e.Data)
+		return parseSectors(e.Data)
+	}
+	return nil, nil
+}
+
+func (a *Actuator) Move(ctx context.Context, dest int) error {
+	sectors, err := a.RouteTo(ctx, dest)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+
+	// ignore the first sector, which is the one we're in
+	for _, sector := range sectors[1:] {
+		a.Send("sh")
+
+		select {
+		case <-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector)):
+			sInfo, ok := a.Data.Sectors[sector]
+			if !ok {
+				return fmt.Errorf("failed to get cached info on sector %d", sector)
+			}
+			if !sInfo.IsSafe() {
+				return fmt.Errorf("unsafe sector ahead")
+			}
+			a.Send(fmt.Sprintf("%d\r", sector))
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return nil
+}
+
+func parseSectors(route string) ([]int, error) {
+	parts := strings.Split(route, " > ")
+	sectors := make([]int, len(parts))
+	for i := range parts {
+		sector, err := strconv.Atoi(parts[i])
+		if err != nil {
+			return nil, err
+		}
+		sectors[i] = sector
+	}
+	return sectors, nil
 }

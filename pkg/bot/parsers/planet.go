@@ -155,7 +155,13 @@ func (p *parsePlanet) finalize() {
 			planet.Figs = figs
 		}
 	}
-	p.data.Planets[planet.ID] = planet
+
+	existing, ok := p.data.Planets[planet.ID]
+	if ok {
+		planet.Summary = existing.Summary
+	}
+
+	p.data.Planets[planet.ID] = &planet
 	p.broker.Publish(&events.Event{
 		Kind:    events.PLANETDISPLAY,
 		ID:      fmt.Sprint(planet.ID),
