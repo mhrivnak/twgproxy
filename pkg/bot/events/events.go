@@ -14,6 +14,7 @@ const (
 	CORPPLANETLISTDISPLAY = "corp planet list display"
 	MBOTTRADEDONE         = "MoM bot trade done"
 	MBOTNOTHINGTOSELL     = "MoM bot nothing to sell"
+	FIGHIT                = "fig hit"
 
 	// prompts
 	COMMANDPROMPT    = "command prompt"

@@ -48,6 +48,7 @@ var ansiPattern *regexp.Regexp = regexp.MustCompile("\x1b\\[.*?m")
 
 var warping *regexp.Regexp = regexp.MustCompile(`Warping to Sector (\d+)`)
 var promptSector *regexp.Regexp = regexp.MustCompile(`\[([0-9]+)\] `)
+var fighit *regexp.Regexp = regexp.MustCompile(`Deployed Fighters Report Sector (\d+)`)
 
 func byteChan(r io.Reader) <-chan byte {
 	c := make(chan byte)
@@ -92,6 +93,8 @@ func (b *Bot) Start(done chan<- interface{}) {
 				case 10: // \n
 					b.ParseLine(string(line[:i]))
 					break loop
+				case 58: // :
+					b.checkForFigHit(string(line[:i]))
 				case 62: // >
 					b.checkForMombotPrompt(string(line[:i+1]))
 				case 63: // ?
@@ -174,6 +177,8 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 	}
 
 	switch command[0] {
+	case []byte("d")[0]:
+		return actions.NewPDrop(&b.Actuator)
 	case []byte("n")[0]:
 		if len(command) == 2 {
 			product, err := actions.ProductTypeFromChar(string(command[1]))
@@ -338,9 +343,33 @@ func (b *Bot) checkForMombotPrompt(line string) {
 	}
 }
 
+func (b *Bot) checkForFigHit(line string) {
+	clean := ansiPattern.ReplaceAllString(line, "")
+	if strings.Contains(clean, "Deployed Fighters Report Sector") {
+		sector, err := parseFigHit(clean)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+		b.Broker.Publish(&events.Event{
+			Kind:    events.FIGHIT,
+			DataInt: sector,
+		})
+	}
+}
+
 func parseWarping(line string) (int, error) {
 	parts := warping.FindStringSubmatch(line)
 	if len(parts) != 2 {
+		return 0, fmt.Errorf("string match failed")
+	}
+	return strconv.Atoi(parts[1])
+}
+
+func parseFigHit(line string) (int, error) {
+	parts := fighit.FindStringSubmatch(line)
+	if len(parts) != 2 {
+		fmt.Println(line)
 		return 0, fmt.Errorf("string match failed")
 	}
 	return strconv.Atoi(parts[1])
