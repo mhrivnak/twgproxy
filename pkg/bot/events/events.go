@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 type EventKind string
@@ -49,6 +50,7 @@ type waitSlice []wait
 type waitMap map[string]waitSlice
 
 type Broker struct {
+	sync.Mutex
 	waits map[EventKind]waitMap
 }
 
@@ -65,6 +67,9 @@ func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan 
 	if b.waits == nil {
 		b.waits = map[EventKind]waitMap{}
 	}
+
+	b.Lock()
+	defer b.Unlock()
 
 	wm, ok := b.waits[kind]
 	if !ok {
@@ -86,6 +91,9 @@ func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan 
 
 func (b *Broker) getWaits(kind EventKind, id string) []wait {
 	ret := waitSlice{}
+	b.Lock()
+	defer b.Unlock()
+
 	wm, ok := b.waits[kind]
 	if !ok {
 		return ret

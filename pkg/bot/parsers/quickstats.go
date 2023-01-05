@@ -53,6 +53,7 @@ func (p *ParseQuickStats) finalize() {
 			parts := quickStatsLn0.FindStringSubmatch(line)
 			if len(parts) != 6 {
 				fmt.Println("failed to parse quick stats line 0")
+				return
 			}
 
 			sector, err := strconv.Atoi(removeCommas(parts[1]))
@@ -84,10 +85,10 @@ func (p *ParseQuickStats) finalize() {
 				fmt.Println("error parsing holds")
 			}
 			p.data.Status.Holds = holds
-		case 2:
+		default:
 			parts := quickStatsLn2.FindStringSubmatch(line)
 			if len(parts) != 2 {
-				fmt.Println("failed to parse quick stats line 0")
+				continue
 			}
 
 			exp, err := strconv.Atoi(removeCommas(parts[1]))
