@@ -150,6 +150,11 @@ func (b *Bot) Start(done chan<- interface{}) {
 										fmt.Println("cancelled action")
 										break loop
 									}
+									if char == []byte("?")[0] {
+										for _, w := range b.Broker.Waits() {
+											fmt.Printf("waiting on Kind: %s  ID: %s\n", w.Kind, w.ID)
+										}
+									}
 								}
 							}
 						}
@@ -177,11 +182,24 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 	}
 
 	switch command[0] {
+	case []byte("a")[0]:
+		switch command[1] {
+		case []byte("u")[0]:
+			return actions.NewUnsurround(&b.Actuator)
+		case []byte("s")[0]:
+			figs, err := strconv.Atoi(string(command[2:]))
+			if err != nil {
+				fmt.Printf("failed to parse number of figs: %s", err.Error())
+				return nil
+			}
+			return actions.NewSurround(figs, &b.Actuator)
+		}
 	case []byte("p")[0]:
 		if len(command) > 2 && command[1] == []byte("r")[0] {
 			action, err := actions.NewPRouteTrade(string(command[2:]), &b.Actuator)
 			if err != nil {
 				fmt.Printf("failed to run planet route trade: %s\n", err.Error())
+				return nil
 			}
 			return action
 		}
@@ -309,6 +327,8 @@ func (b *Bot) ParseLine(line string) {
 		b.Broker.Publish(&events.Event{Kind: events.MBOTTRADEDONE})
 	case strings.Contains(clean, "[General] {cbot} - Nothing to sell"):
 		b.Broker.Publish(&events.Event{Kind: events.MBOTNOTHINGTOSELL})
+	case strings.Contains(clean, "Relative Density Scan"):
+		b.parsers[parsers.DENSITYSCAN] = parsers.NewParseDensityScan(b.data, b.Broker)
 	}
 
 	for k, parser := range b.parsers {
@@ -344,6 +364,7 @@ func (b *Bot) checkForPrompt(line string) {
 			fmt.Printf("failed to parse sector from prompt: %s\n", err.Error())
 			break
 		}
+		e.DataInt = sector
 		b.data.Status.Sector = sector
 	case "Planet comma":
 		e.ID = events.PLANETPROMPT

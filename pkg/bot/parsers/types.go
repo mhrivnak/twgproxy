@@ -3,13 +3,14 @@ package parsers
 import "strings"
 
 const (
-	ROUTEINFO   = "route info"
-	SECTORINFO  = "sector info"
+	CORPPLANETS = "corp planet display"
+	DENSITYSCAN = "density scan"
 	PLANETINFO  = "planet info"
+	PORTREPORT  = "port report"
 	PORTROBINFO = "port rob info"
 	QUICKSTATS  = "quick stats"
-	CORPPLANETS = "corp planet display"
-	PORTREPORT  = "port report"
+	ROUTEINFO   = "route info"
+	SECTORINFO  = "sector info"
 )
 
 type Parser interface {

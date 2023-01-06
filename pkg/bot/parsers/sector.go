@@ -24,7 +24,7 @@ type ParseSector struct {
 }
 
 var sectorInfo *regexp.Regexp = regexp.MustCompile(`^Sector  : (\d+)`)
-var portType *regexp.Regexp = regexp.MustCompile(`^Ports   : [a-zA-Z ']+, Class \d \(([SB]{3})\)`)
+var portType *regexp.Regexp = regexp.MustCompile(`^Ports   : [a-zA-Z '-]+, Class \d \(([SB]{3})\)`)
 var figInfo *regexp.Regexp = regexp.MustCompile(`^Fighters: ([0-9,]+) \((.+?)\) \[([A-Za-z]+)\]`)
 var minesInfo *regexp.Regexp = regexp.MustCompile(`^Mines   : ([0-9]+) \(Type 1 Armid\) \(([A-Za-z ]+)\)`)
 var warpsInfo *regexp.Regexp = regexp.MustCompile(`^Warps to Sector\(s\) :  ([0-9 -]+)`)
@@ -117,6 +117,7 @@ func (p *ParseSector) finalize() {
 				}
 				s.Warps = append(s.Warps, warp)
 			}
+			s.WarpCount = len(s.Warps)
 		}
 	}
 
@@ -126,6 +127,7 @@ func (p *ParseSector) finalize() {
 	if ok {
 		if len(s.Warps) == 0 {
 			s.Warps = existing.Warps
+			s.WarpCount = existing.WarpCount
 		}
 	}
 

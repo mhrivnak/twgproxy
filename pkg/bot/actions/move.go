@@ -30,7 +30,7 @@ func (m *move) Start(ctx context.Context) <-chan struct{} {
 func (m *move) run(ctx context.Context) {
 	defer close(m.done)
 
-	err := m.actuator.Move(ctx, m.dest)
+	err := m.actuator.Move(ctx, m.dest, false)
 	if err != nil {
 		fmt.Println(err.Error())
 	}

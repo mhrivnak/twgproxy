@@ -9,6 +9,8 @@ type Sector struct {
 	MinesFriendly bool
 	Port          *Port
 	Warps         []int
+	WarpCount     int
+	Density       int
 }
 
 type Port struct {

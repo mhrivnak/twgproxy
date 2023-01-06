@@ -60,15 +60,15 @@ func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
 	// wait for events
 	select {
 	case <-ctx.Done():
-		break
+		return nil, ctx.Err()
 	case e := <-a.Broker.WaitFor(ctx, events.ROUTEDISPLAY, ""):
 		fmt.Printf("got route: %s\n", e.Data)
 		return parseSectors(e.Data)
 	}
-	return nil, nil
 }
 
-func (a *Actuator) Move(ctx context.Context, dest int) error {
+func (a *Actuator) Move(ctx context.Context, dest int, block bool) error {
+	fmt.Printf("MOVE to %d\n", dest)
 	sectors, err := a.RouteTo(ctx, dest)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -91,6 +91,19 @@ func (a *Actuator) Move(ctx context.Context, dest int) error {
 			a.Send(fmt.Sprintf("%d\r", sector))
 		case <-ctx.Done():
 			return ctx.Err()
+		}
+	}
+
+	if block {
+		for {
+			select {
+			case e := <-a.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.COMMANDPROMPT):
+				if e.DataInt == dest {
+					return nil
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
 

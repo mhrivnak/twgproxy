@@ -9,27 +9,28 @@ import (
 type EventKind string
 
 const (
+	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
+	DENSITYDISPLAY        EventKind = "density report display"
+	FIGHIT                EventKind = "fig hit"
+	MBOTNOTHINGTOSELL     EventKind = "MoM bot nothing to sell"
+	MBOTTRADEDONE         EventKind = "MoM bot trade done"
 	PLANETDISPLAY         EventKind = "planet display"
+	PORTREPORTDISPLAY     EventKind = "port report"
 	PORTROBCREDS          EventKind = "port rob creds"
+	PROMPTDISPLAY         EventKind = "prompt display"
 	ROUTEDISPLAY          EventKind = "route display"
 	SECTORDISPLAY         EventKind = "sector display"
-	PROMPTDISPLAY         EventKind = "prompt display"
-	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
-	MBOTTRADEDONE         EventKind = "MoM bot trade done"
-	MBOTNOTHINGTOSELL     EventKind = "MoM bot nothing to sell"
-	FIGHIT                EventKind = "fig hit"
-	PORTREPORTDISPLAY     EventKind = "port report"
 
 	// prompts
+	CITADELPROMPT    = "citadel prompt"
 	COMMANDPROMPT    = "command prompt"
 	COMPUTERPROMPT   = "computer prompt"
-	PLANETPROMPT     = "planet prompt"
 	CORPPROMPT       = "corp prompt"
-	CITADELPROMPT    = "citadel prompt"
-	STARDOCKPROMPT   = "stardock prompt"
-	SHIPYARDPROMPT   = "shipyard prompt"
 	HWEMPORIUMPROMPT = "hardware emporium prompt"
 	MOMBOTPROMPT     = "MoM bot prompt"
+	PLANETPROMPT     = "planet prompt"
+	SHIPYARDPROMPT   = "shipyard prompt"
+	STARDOCKPROMPT   = "stardock prompt"
 )
 
 type Event struct {
@@ -39,13 +40,13 @@ type Event struct {
 	DataInt int
 }
 
-type wait struct {
+type Wait struct {
 	Kind EventKind
 	ID   string
 	c    chan<- *Event
 }
 
-type waitSlice []wait
+type waitSlice []Wait
 
 type waitMap map[string]waitSlice
 
@@ -57,10 +58,31 @@ type Broker struct {
 func (b *Broker) Publish(e *Event) {
 	fmt.Printf("Publishing event Kind: %s, ID: %s\n", e.Kind, e.ID)
 	waits := b.getWaits(e.Kind, e.ID)
+
+	if len(waits) > 0 {
+		b.Lock()
+		defer b.Unlock()
+	}
+
 	for _, w := range waits {
 		w.c <- e
 		fmt.Printf("sent event to listener Kind: %s, ID: %s\n", w.Kind, w.ID)
 	}
+}
+
+func (b *Broker) Waits() []Wait {
+	ret := []Wait{}
+
+	b.Lock()
+	defer b.Unlock()
+
+	for _, wm := range b.waits {
+		for _, w := range wm {
+			ret = append(ret, w...)
+		}
+	}
+
+	return ret
 }
 
 func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan *Event {
@@ -80,7 +102,7 @@ func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan 
 	// size 1 so an event can be sent even if the receiver is no longer waiting
 	c := make(chan *Event, 1)
 
-	wm[id] = append(wm[id], wait{
+	wm[id] = append(wm[id], Wait{
 		Kind: kind,
 		ID:   id,
 		c:    c,
@@ -89,7 +111,7 @@ func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan 
 	return c
 }
 
-func (b *Broker) getWaits(kind EventKind, id string) []wait {
+func (b *Broker) getWaits(kind EventKind, id string) []Wait {
 	ret := waitSlice{}
 	b.Lock()
 	defer b.Unlock()
