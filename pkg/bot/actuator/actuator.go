@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -106,6 +107,25 @@ func (a *Actuator) Move(ctx context.Context, dest int, block bool) error {
 			}
 		}
 	}
+
+	return nil
+}
+
+func (a *Actuator) LandNewest(ctx context.Context) error {
+	var planetIDs []int
+
+	a.Send("l")
+	select {
+	case e := <-a.Broker.WaitFor(ctx, events.PLANETLANDINGDISPLAY, ""):
+		planetIDs = e.DataSliceInt
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	planetIDs = sort.IntSlice(planetIDs)
+
+	newest := planetIDs[len(planetIDs)-1]
+	a.Send(fmt.Sprintf("%d\r", newest))
 
 	return nil
 }

@@ -1,9 +1,13 @@
 package models
 
+import "sync"
+
 type Data struct {
-	Planets map[int]*Planet
-	Sectors map[int]*Sector
-	Status  Status
+	Planets    map[int]*Planet
+	Sectors    map[int]*Sector
+	Status     Status
+	PlanetLock sync.Mutex
+	SectorLock sync.Mutex
 }
 
 func NewData() *Data {
@@ -20,4 +24,6 @@ type Status struct {
 	Holds   int
 	Sector  int
 	Shields int
+	GTorps  int
+	AtmDts  int
 }

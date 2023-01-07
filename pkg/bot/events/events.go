@@ -14,10 +14,13 @@ const (
 	FIGHIT                EventKind = "fig hit"
 	MBOTNOTHINGTOSELL     EventKind = "MoM bot nothing to sell"
 	MBOTTRADEDONE         EventKind = "MoM bot trade done"
+	PLANETCREATE          EventKind = "planet create"
 	PLANETDISPLAY         EventKind = "planet display"
+	PLANETLANDINGDISPLAY  EventKind = "planet landing display"
 	PORTREPORTDISPLAY     EventKind = "port report"
 	PORTROBCREDS          EventKind = "port rob creds"
 	PROMPTDISPLAY         EventKind = "prompt display"
+	QUICKSTATDISPLAY      EventKind = "quick stat display"
 	ROUTEDISPLAY          EventKind = "route display"
 	SECTORDISPLAY         EventKind = "sector display"
 
@@ -34,10 +37,11 @@ const (
 )
 
 type Event struct {
-	Kind    EventKind
-	ID      string
-	Data    string
-	DataInt int
+	Kind         EventKind
+	ID           string
+	Data         string
+	DataInt      int
+	DataSliceInt []int
 }
 
 type Wait struct {

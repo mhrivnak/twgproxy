@@ -161,7 +161,10 @@ func (p *parsePlanet) finalize() {
 		planet.Summary = existing.Summary
 	}
 
+	p.data.PlanetLock.Lock()
 	p.data.Planets[planet.ID] = &planet
+	p.data.PlanetLock.Unlock()
+
 	p.broker.Publish(&events.Event{
 		Kind:    events.PLANETDISPLAY,
 		ID:      fmt.Sprint(planet.ID),

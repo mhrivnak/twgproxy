@@ -203,6 +203,14 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return action
 		}
+		if len(command) > 2 && command[1] == []byte("c")[0] {
+			args, err := parsePCreateArgs(string(command[2:]))
+			if err != nil {
+				fmt.Printf("failed to parse planet create args: %s\n", err.Error())
+				return nil
+			}
+			return actions.NewPCreate(args, &b.Actuator)
+		}
 	case []byte("d")[0]:
 		return actions.NewPDrop(&b.Actuator)
 	case []byte("n")[0]:
@@ -239,7 +247,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 		if len(command) == 1 {
 			j, err := json.Marshal(b.data.Status)
 			if err != nil {
-				fmt.Println("failed to marshal Sector")
+				fmt.Println("failed to marshal Status")
 				return nil
 			}
 			fmt.Println(string(j))
@@ -329,6 +337,10 @@ func (b *Bot) ParseLine(line string) {
 		b.Broker.Publish(&events.Event{Kind: events.MBOTNOTHINGTOSELL})
 	case strings.Contains(clean, "Relative Density Scan"):
 		b.parsers[parsers.DENSITYSCAN] = parsers.NewParseDensityScan(b.data, b.Broker)
+	case strings.HasPrefix(clean, "What do you want to name this planet?"):
+		b.parsers[parsers.PLANETCREATE] = parsers.NewPCreateParser(b.Broker)
+	case strings.HasPrefix(clean, "Registry# and Planet Name"):
+		b.parsers[parsers.PLANETLANDING] = parsers.NewPlanetLandingParser(b.Broker)
 	}
 
 	for k, parser := range b.parsers {
@@ -424,4 +436,26 @@ func parseFigHit(line string) (int, error) {
 		return 0, fmt.Errorf("string match failed")
 	}
 	return strconv.Atoi(parts[1])
+}
+
+func parsePCreateArgs(args string) (map[string]int, error) {
+	if len(args)%2 != 0 {
+		return nil, fmt.Errorf("must have an even number of args. Ex: 2L1O2H")
+	}
+
+	ret := map[string]int{}
+	var count int
+	var err error
+
+	for i, c := range args {
+		if i%2 == 0 {
+			count, err = strconv.Atoi(string(c))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			ret[string(c)] = count
+		}
+	}
+	return ret, nil
 }
