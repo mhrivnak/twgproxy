@@ -57,6 +57,12 @@ loop:
 
 	// load up with figs and get quick stats so we know the capacity
 	p.actuator.Send("m\r\r\r/")
+	select {
+	case <-p.actuator.Broker.WaitFor(ctx, events.QUICKSTATDISPLAY, ""):
+	case <-ctx.Done():
+		fmt.Println(ctx.Err())
+		return
+	}
 
 	for {
 		var available int
@@ -79,10 +85,10 @@ loop:
 		p.actuator.Send(fmt.Sprintf("%d\rcd", min(available, p.figs)))
 
 		p.actuator.Land(planet.ID)
+		// load the ship up with figs
+		p.actuator.Send("m\r\r\r")
 
 		if available >= p.figs {
-			// load the ship up with figs
-			p.actuator.Send("m\r\r\r")
 			return
 		}
 	}
