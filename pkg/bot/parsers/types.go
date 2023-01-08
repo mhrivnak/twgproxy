@@ -5,6 +5,7 @@ import "strings"
 const (
 	CORPPLANETS   = "corp planet display"
 	DENSITYSCAN   = "density scan"
+	FIGDEPLOY     = "fig deploy"
 	PLANETCREATE  = "planet create"
 	PLANETINFO    = "planet info"
 	PLANETLANDING = "planet landing"

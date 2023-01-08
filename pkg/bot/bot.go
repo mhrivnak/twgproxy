@@ -211,6 +211,14 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return actions.NewPCreate(args, &b.Actuator)
 		}
+		if len(command) > 3 && string(command[1:3]) == "fd" {
+			figs, err := strconv.Atoi(string(command[3:]))
+			if err != nil {
+				fmt.Printf("failed to parse fig count from args: %s\n", err.Error())
+				return nil
+			}
+			return actions.NewPFigDeploy(figs, &b.Actuator)
+		}
 	case []byte("d")[0]:
 		return actions.NewPDrop(&b.Actuator)
 	case []byte("n")[0]:
@@ -341,6 +349,8 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.PLANETCREATE] = parsers.NewPCreateParser(b.Broker)
 	case strings.HasPrefix(clean, "Registry# and Planet Name"):
 		b.parsers[parsers.PLANETLANDING] = parsers.NewPlanetLandingParser(b.Broker)
+	case strings.HasPrefix(clean, "<Drop/Take Fighters>"):
+		b.parsers[parsers.FIGDEPLOY] = parsers.NewFigDeployParser(b.Broker)
 	}
 
 	for k, parser := range b.parsers {

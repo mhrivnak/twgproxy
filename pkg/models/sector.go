@@ -11,7 +11,6 @@ type Sector struct {
 	Warps         []int
 	WarpCount     int
 	Density       int
-	Planets       []int
 }
 
 type Port struct {

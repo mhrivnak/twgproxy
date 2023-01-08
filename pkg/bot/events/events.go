@@ -11,6 +11,7 @@ type EventKind string
 const (
 	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
 	DENSITYDISPLAY        EventKind = "density report display"
+	FIGDEPLOY             EventKind = "fig deploy display"
 	FIGHIT                EventKind = "fig hit"
 	MBOTNOTHINGTOSELL     EventKind = "MoM bot nothing to sell"
 	MBOTTRADEDONE         EventKind = "MoM bot trade done"
