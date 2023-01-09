@@ -298,11 +298,18 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			fmt.Println(string(j))
 		}
 	case []byte("r")[0]:
-		if len(command) > 1 {
-			fmt.Println("got extra args for rob command")
-			return nil
+		if len(command) == 1 {
+			return actions.NewRob(&b.Actuator)
 		}
-		return actions.NewRob(&b.Actuator)
+		if len(command) > 2 && command[1] == []byte("p")[0] {
+			// rob pair
+			otherPort, err := strconv.Atoi((string(command[2:])))
+			if err != nil {
+				fmt.Printf("failed to parse other sector from arg: %s\n", err.Error())
+				return nil
+			}
+			return actions.NewRobPair(otherPort, &b.Actuator)
+		}
 	}
 	return nil
 }
@@ -351,6 +358,8 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.PLANETLANDING] = parsers.NewPlanetLandingParser(b.Broker)
 	case strings.HasPrefix(clean, "<Drop/Take Fighters>"):
 		b.parsers[parsers.FIGDEPLOY] = parsers.NewFigDeployParser(b.Broker)
+	case strings.HasPrefix(clean, "You connect to their control computer to siphon the funds out"):
+		b.parsers[parsers.ROBRESULT] = parsers.NewRobResultParser(b.Broker)
 	}
 
 	for k, parser := range b.parsers {

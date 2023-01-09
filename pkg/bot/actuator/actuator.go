@@ -130,6 +130,35 @@ func (a *Actuator) LandNewest(ctx context.Context) error {
 	return nil
 }
 
+func (a *Actuator) Rob(ctx context.Context) {
+	a.Send("d/pr\rr")
+
+	select {
+	case <-ctx.Done():
+		break
+	case e := <-a.Broker.WaitFor(ctx, events.PORTROBCREDS, ""):
+		creds := e.DataInt
+		if creds < 700000 {
+			fmt.Println("not enough creds to rob")
+			a.Send("0\r")
+			a.Broker.Publish(&events.Event{
+				Kind: events.ROBRESULT,
+				ID:   string(events.ROBABORT),
+			})
+			return
+		}
+		credsToRob := int(float32(creds) * 1.11)
+		maxToRob := 3 * a.Data.Status.Exp
+
+		if credsToRob > maxToRob {
+			credsToRob = maxToRob
+		}
+
+		a.Send(fmt.Sprintf("%d\r", credsToRob))
+	}
+
+}
+
 func parseSectors(route string) ([]int, error) {
 	parts := strings.Split(route, " > ")
 	sectors := make([]int, len(parts))

@@ -11,6 +11,7 @@ const (
 	PLANETLANDING = "planet landing"
 	PORTREPORT    = "port report"
 	PORTROBINFO   = "port rob info"
+	ROBRESULT     = "rob result"
 	QUICKSTATS    = "quick stats"
 	ROUTEINFO     = "route info"
 	SECTORINFO    = "sector info"

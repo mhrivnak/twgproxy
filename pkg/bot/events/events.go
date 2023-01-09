@@ -7,6 +7,7 @@ import (
 )
 
 type EventKind string
+type RobResult string
 
 const (
 	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
@@ -22,8 +23,13 @@ const (
 	PORTROBCREDS          EventKind = "port rob creds"
 	PROMPTDISPLAY         EventKind = "prompt display"
 	QUICKSTATDISPLAY      EventKind = "quick stat display"
+	ROBRESULT             EventKind = "rob result"
 	ROUTEDISPLAY          EventKind = "route display"
 	SECTORDISPLAY         EventKind = "sector display"
+
+	ROBSUCCESS RobResult = "rob success"
+	ROBABORT   RobResult = "rob abort"
+	ROBBUSTED  RobResult = "rob busted"
 
 	// prompts
 	CITADELPROMPT    = "citadel prompt"
