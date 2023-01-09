@@ -156,12 +156,12 @@ func (p *parsePlanet) finalize() {
 		}
 	}
 
+	p.data.PlanetLock.Lock()
 	existing, ok := p.data.Planets[planet.ID]
 	if ok {
 		planet.Summary = existing.Summary
 	}
 
-	p.data.PlanetLock.Lock()
 	p.data.Planets[planet.ID] = &planet
 	p.data.PlanetLock.Unlock()
 
