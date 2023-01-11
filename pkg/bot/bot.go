@@ -219,6 +219,14 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return actions.NewPFigDeploy(figs, &b.Actuator)
 		}
+		if len(command) > 2 && command[1] == []byte("u")[0] {
+			upgrade, err := actions.NewPUpgrade(string(command[2:]), &b.Actuator)
+			if err != nil {
+				fmt.Printf("failed to run mass upgrade route: %s\n", err.Error())
+				return nil
+			}
+			return upgrade
+		}
 	case []byte("d")[0]:
 		return actions.NewPDrop(&b.Actuator)
 	case []byte("n")[0]:
@@ -360,6 +368,8 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.FIGDEPLOY] = parsers.NewFigDeployParser(b.Broker)
 	case strings.HasPrefix(clean, "You connect to their control computer to siphon the funds out"):
 		b.parsers[parsers.ROBRESULT] = parsers.NewRobResultParser(b.Broker)
+	case strings.HasPrefix(clean, "Script terminated:"):
+		b.Broker.Publish(&events.Event{Kind: events.TWXSCRIPTTERM})
 	}
 
 	for k, parser := range b.parsers {

@@ -2,6 +2,14 @@ package models
 
 import "sync"
 
+type LRSType string
+
+const (
+	LRSHOLO    LRSType = "holo scanner"
+	LRSDENSITY LRSType = "density scanner"
+	LRSNONE    LRSType = "no scanner"
+)
+
 type Data struct {
 	Planets    map[int]*Planet
 	Sectors    map[int]*Sector
@@ -26,4 +34,5 @@ type Status struct {
 	Shields int
 	GTorps  int
 	AtmDts  int
+	LRS     LRSType
 }

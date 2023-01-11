@@ -106,6 +106,13 @@ func (p *ParseQuickStats) finalize() {
 				fmt.Println("error parsing atmdts")
 			}
 			p.data.Status.AtmDts = atmdt
+		case "LRS":
+			switch parts[2] {
+			case "None":
+				p.data.Status.LRS = models.LRSNONE
+			case "Holo":
+				p.data.Status.LRS = models.LRSHOLO
+			}
 		}
 	}
 	p.broker.Publish(&events.Event{

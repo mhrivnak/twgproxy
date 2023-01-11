@@ -26,6 +26,7 @@ const (
 	ROBRESULT             EventKind = "rob result"
 	ROUTEDISPLAY          EventKind = "route display"
 	SECTORDISPLAY         EventKind = "sector display"
+	TWXSCRIPTTERM         EventKind = "twx script terminated"
 
 	ROBSUCCESS RobResult = "rob success"
 	ROBABORT   RobResult = "rob abort"

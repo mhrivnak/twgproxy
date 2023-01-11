@@ -3,9 +3,8 @@ package actions
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 
+	"github.com/mhrivnak/twgproxy/pkg/bot/actions/tools"
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
@@ -20,7 +19,7 @@ type pRouteTrade struct {
 func NewPRouteTrade(points string, actuator *actuator.Actuator) (Action, error) {
 	done := make(chan struct{})
 
-	parsedPoints, err := parsePoints(points)
+	parsedPoints, err := tools.ParsePoints(points)
 
 	return &pRouteTrade{
 		actuator: actuator,
@@ -90,6 +89,7 @@ func (p *pRouteTrade) run(ctx context.Context) {
 			}
 
 			// get port report
+			commandPromptWait := p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.COMMANDPROMPT)
 			p.actuator.Send("cr\rq")
 
 			select {
@@ -97,6 +97,16 @@ func (p *pRouteTrade) run(ctx context.Context) {
 				return
 			case <-p.actuator.Broker.WaitFor(ctx, events.PORTREPORTDISPLAY, ""):
 			}
+
+			// make sure we're back at the command prompt before proceeding.
+			// Command sent, such as landing, before getting back to the command
+			// prompt can get swallowed.
+			select {
+			case <-commandPromptWait:
+			case <-ctx.Done():
+				return
+			}
+
 			// re-fetch the sector to get the updated port report
 			sector, ok = p.actuator.Data.Sectors[sectorID]
 			if !ok {
@@ -147,19 +157,6 @@ func (p *pRouteTrade) run(ctx context.Context) {
 		}
 
 	}
-}
-
-func parsePoints(points string) ([]int, error) {
-	parts := strings.Split(points, ",")
-	sectors := make([]int, len(parts))
-	for i := range parts {
-		sector, err := strconv.Atoi(parts[i])
-		if err != nil {
-			return nil, err
-		}
-		sectors[i] = sector
-	}
-	return sectors, nil
 }
 
 func choosePlanet(sector *models.Sector, planets []*models.Planet) *models.Planet {

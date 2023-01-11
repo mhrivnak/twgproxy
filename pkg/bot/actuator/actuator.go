@@ -46,6 +46,76 @@ func (a *Actuator) MombotSend(ctx context.Context, command string) {
 	a.Send(command)
 }
 
+func (a *Actuator) QuickStats(ctx context.Context) {
+	a.Send("/")
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-a.Broker.WaitFor(ctx, events.QUICKSTATDISPLAY, ""):
+	}
+}
+
+func (a *Actuator) RouteWalk(ctx context.Context, points []int, task func()) {
+	a.QuickStats(ctx)
+
+	completed := map[int]struct{}{}
+
+	for _, point := range points {
+		route, err := a.RouteTo(ctx, point)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+
+		for i, sectorID := range route {
+			if i > 0 {
+				// move to the next sector
+				err = a.Move(ctx, sectorID, true)
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+			}
+
+			// skip if we already processed this sector
+			_, ok := completed[sectorID]
+			if ok {
+				fmt.Printf("skipping sector %d that we already visited\n", sectorID)
+				continue
+			}
+			// mark completed
+			completed[sectorID] = struct{}{}
+
+			// run the provided task
+			task()
+
+			// wait for a prompt before proceeding; sometimes TWX scripts
+			// terminate before all of their commands are done
+			a.Send("\r")
+			select {
+			case <-ctx.Done():
+				return
+			case <-a.Broker.WaitFor(ctx, events.PROMPTDISPLAY, ""):
+			}
+		}
+	}
+}
+
+func (a *Actuator) MassUpgrade(ctx context.Context, block bool) error {
+	a.Send("$ss2_massupgrade\rg")
+
+	if block {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-a.Broker.WaitFor(ctx, events.TWXSCRIPTTERM, ""):
+		}
+	}
+
+	return nil
+}
+
 func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
 	current := a.Data.Sectors[a.Data.Status.Sector]
 	for _, warp := range current.Warps {
@@ -78,21 +148,24 @@ func (a *Actuator) Move(ctx context.Context, dest int, block bool) error {
 
 	// ignore the first sector, which is the one we're in
 	for _, sector := range sectors[1:] {
-		a.Send("sh")
+		if a.Data.Status.LRS == models.LRSHOLO {
+			a.Send("sh")
 
-		select {
-		case <-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector)):
-			sInfo, ok := a.Data.Sectors[sector]
-			if !ok {
-				return fmt.Errorf("failed to get cached info on sector %d", sector)
+			select {
+			case <-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector)):
+				sInfo, ok := a.Data.Sectors[sector]
+				if !ok {
+					return fmt.Errorf("failed to get cached info on sector %d", sector)
+				}
+				if !sInfo.IsSafe() {
+					return fmt.Errorf("unsafe sector ahead")
+				}
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-			if !sInfo.IsSafe() {
-				return fmt.Errorf("unsafe sector ahead")
-			}
-			a.Send(fmt.Sprintf("%d\r", sector))
-		case <-ctx.Done():
-			return ctx.Err()
 		}
+
+		a.Send(fmt.Sprintf("%d\r", sector))
 	}
 
 	if block {
