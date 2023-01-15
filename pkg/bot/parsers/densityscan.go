@@ -23,7 +23,7 @@ type ParseDensityScan struct {
 	broker *events.Broker
 }
 
-var densityInfo *regexp.Regexp = regexp.MustCompile(`^Sector +([0-9]+) +==> +([0-9]+)  Warps : ([0-9]+)`)
+var densityInfo *regexp.Regexp = regexp.MustCompile(`^Sector +([0-9]+) +==> +([0-9,]+)  Warps : ([0-9]+)`)
 
 func (p *ParseDensityScan) Parse(line string) error {
 	p.lines = append(p.lines, line)
@@ -44,6 +44,7 @@ func (p *ParseDensityScan) Done() bool {
 }
 
 func (p *ParseDensityScan) finalize() {
+	p.data.SectorLock.Lock()
 	for _, line := range p.lines[2:] {
 		parts := densityInfo.FindStringSubmatch(line)
 		if len(parts) != 4 {
@@ -63,7 +64,7 @@ func (p *ParseDensityScan) finalize() {
 			continue
 		}
 
-		density, err := strconv.Atoi(parts[2])
+		density, err := strconv.Atoi(removeCommas(parts[2]))
 		if err != nil {
 			fmt.Printf("failed to parse density: %s\n", err.Error())
 			return
@@ -77,6 +78,7 @@ func (p *ParseDensityScan) finalize() {
 		}
 		sector.WarpCount = warpCount
 	}
+	p.data.SectorLock.Unlock()
 
 	p.broker.Publish(&events.Event{
 		Kind: events.DENSITYDISPLAY,

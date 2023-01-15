@@ -78,7 +78,7 @@ func (p *pRouteTrade) run(ctx context.Context) {
 			// mark completed
 			completed[sectorID] = struct{}{}
 
-			sector, ok := p.actuator.Data.Sectors[sectorID]
+			sector, ok := p.actuator.Data.GetSector(sectorID)
 			if !ok {
 				fmt.Println("current sector not in cache; that shouldn't happen")
 				return
@@ -108,7 +108,7 @@ func (p *pRouteTrade) run(ctx context.Context) {
 			}
 
 			// re-fetch the sector to get the updated port report
-			sector, ok = p.actuator.Data.Sectors[sectorID]
+			sector, ok = p.actuator.Data.GetSector(sectorID)
 			if !ok {
 				fmt.Println("current sector not in cache; that shouldn't happen")
 				return

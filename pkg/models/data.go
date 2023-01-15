@@ -18,6 +18,14 @@ type Data struct {
 	SectorLock sync.Mutex
 }
 
+func (d *Data) GetSector(sector int) (*Sector, bool) {
+	d.SectorLock.Lock()
+	defer d.SectorLock.Unlock()
+
+	s, ok := d.Sectors[sector]
+	return s, ok
+}
+
 func NewData() *Data {
 	return &Data{
 		Planets: map[int]*Planet{},

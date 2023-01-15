@@ -40,7 +40,7 @@ func (s *unsurround) run(ctx context.Context) {
 		return
 	}
 
-	sector, ok := s.actuator.Data.Sectors[s.actuator.Data.Status.Sector]
+	sector, ok := s.actuator.Data.GetSector(s.actuator.Data.Status.Sector)
 	if !ok {
 		fmt.Println("current sector not in cache")
 		return
@@ -48,7 +48,7 @@ func (s *unsurround) run(ctx context.Context) {
 	fmt.Printf("START: %d\n", sector.ID)
 
 	for _, n := range sector.Warps {
-		neighbor, ok := s.actuator.Data.Sectors[n]
+		neighbor, ok := s.actuator.Data.GetSector(n)
 		if !ok {
 			fmt.Printf("neighbor %d not in cache\n", n)
 			return

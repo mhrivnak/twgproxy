@@ -8,6 +8,7 @@ import (
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
+	"github.com/mhrivnak/twgproxy/pkg/models"
 )
 
 type surround struct {
@@ -34,25 +35,26 @@ func (s *surround) run(ctx context.Context) {
 	start := time.Now()
 
 	// scan to make sure it's safe and get warp counts
-	s.actuator.Send("sdsh")
+	s.actuator.Send("shsd")
 
 	select {
-	case <-s.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(s.actuator.Data.Status.Sector)):
+	case <-s.actuator.Broker.WaitFor(ctx, events.DENSITYDISPLAY, ""):
 	case <-ctx.Done():
 		fmt.Println(ctx.Err())
 		return
 	}
 
-	sector, ok := s.actuator.Data.Sectors[s.actuator.Data.Status.Sector]
+	s.actuator.Data.SectorLock.Lock()
+	sector, ok := s.actuator.Data.GetSector(s.actuator.Data.Status.Sector)
 	if !ok {
 		fmt.Println("current sector not in cache")
 		return
 	}
 
-	needFigs := []int{}
+	needFigs := []models.Sector{}
 
 	for _, n := range sector.Warps {
-		neighbor, ok := s.actuator.Data.Sectors[n]
+		neighbor, ok := s.actuator.Data.GetSector(n)
 		if !ok {
 			fmt.Printf("neighbor %d not in cache\n", n)
 			return
@@ -62,31 +64,25 @@ func (s *surround) run(ctx context.Context) {
 			return
 		}
 		if neighbor.Figs < s.figs {
-			needFigs = append(needFigs, n)
+			needFigs = append(needFigs, *neighbor)
 		}
 	}
+
+	s.actuator.Data.SectorLock.Unlock()
 
 	// sort so we visit the sectors with the most warps first. That gives the
 	// opponent being surrounded fewer options for where to run.
 	sort.Slice(needFigs, func(i, j int) bool {
-		iSec, ok := s.actuator.Data.Sectors[needFigs[i]]
-		if !ok {
-			return needFigs[i] < needFigs[j]
-		}
-		jSec, ok := s.actuator.Data.Sectors[needFigs[j]]
-		if !ok {
-			return needFigs[i] < needFigs[j]
-		}
-		return iSec.WarpCount > jSec.WarpCount
+		return needFigs[i].WarpCount > needFigs[j].WarpCount
 	})
 
 	for i, n := range needFigs {
-		moveString := fmt.Sprintf("%d\r", n)
+		moveString := fmt.Sprintf("%d\r", n.ID)
 		if i > 0 {
-			moveString = fmt.Sprintf("%d\rne", n)
+			moveString = fmt.Sprintf("%d\rne", n.ID)
 		}
 
-		current, ok := s.actuator.Data.Sectors[s.actuator.Data.Status.Sector]
+		current, ok := s.actuator.Data.GetSector(s.actuator.Data.Status.Sector)
 		if !ok {
 			fmt.Println("sector not in cache")
 			return
@@ -103,10 +99,10 @@ func (s *surround) run(ctx context.Context) {
 		if directReturn || i == 0 {
 			s.actuator.Send(moveString)
 		} else {
-			s.actuator.Move(ctx, n, false)
+			s.actuator.Move(ctx, n.ID, false)
 		}
 		select {
-		case <-s.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(n)):
+		case <-s.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(n.ID)):
 		case <-ctx.Done():
 			fmt.Println(ctx.Err())
 			return

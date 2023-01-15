@@ -276,7 +276,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 				fmt.Printf("failed to parse sector from command %s\n", string(command))
 				return nil
 			}
-			s, ok := b.data.Sectors[sector]
+			s, ok := b.data.GetSector(sector)
 			if !ok {
 				fmt.Printf("Don't have info on sector %d\n", sector)
 				return nil

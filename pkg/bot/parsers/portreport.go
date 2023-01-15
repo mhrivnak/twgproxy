@@ -98,7 +98,7 @@ func (p *parsePortReport) finalize() {
 		Equ:  equ,
 	}
 
-	sector, ok := p.data.Sectors[sectorID]
+	sector, ok := p.data.GetSector(sectorID)
 	if !ok {
 		fmt.Printf("sector %d not in cache\n", sectorID)
 		return

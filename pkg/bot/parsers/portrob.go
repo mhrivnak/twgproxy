@@ -62,7 +62,7 @@ func (p *ParsePortRob) finalize() {
 		return
 	}
 
-	sector, ok := p.data.Sectors[p.data.Status.Sector]
+	sector, ok := p.data.GetSector(p.data.Status.Sector)
 	if !ok {
 		fmt.Printf("sector %d not found for port rob\n", p.data.Status.Sector)
 		return

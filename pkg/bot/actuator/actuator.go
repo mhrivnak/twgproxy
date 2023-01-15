@@ -117,7 +117,10 @@ func (a *Actuator) MassUpgrade(ctx context.Context, block bool) error {
 }
 
 func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
-	current := a.Data.Sectors[a.Data.Status.Sector]
+	current, ok := a.Data.GetSector(a.Data.Status.Sector)
+	if !ok {
+		return nil, fmt.Errorf("current sector %d not found in cache", a.Data.Status.Sector)
+	}
 	for _, warp := range current.Warps {
 		if warp == sector {
 			// no need to plot a route if the destination is next door
@@ -139,6 +142,9 @@ func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
 }
 
 func (a *Actuator) Move(ctx context.Context, dest int, block bool) error {
+	// make sure we know what kind of long range scanner is available
+	a.QuickStats(ctx)
+
 	fmt.Printf("MOVE to %d\n", dest)
 	sectors, err := a.RouteTo(ctx, dest)
 	if err != nil {
@@ -153,7 +159,7 @@ func (a *Actuator) Move(ctx context.Context, dest int, block bool) error {
 
 			select {
 			case <-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector)):
-				sInfo, ok := a.Data.Sectors[sector]
+				sInfo, ok := a.Data.GetSector(sector)
 				if !ok {
 					return fmt.Errorf("failed to get cached info on sector %d", sector)
 				}
@@ -195,7 +201,7 @@ func (a *Actuator) LandNewest(ctx context.Context) error {
 		return ctx.Err()
 	}
 
-	planetIDs = sort.IntSlice(planetIDs)
+	sort.Ints(planetIDs)
 
 	newest := planetIDs[len(planetIDs)-1]
 	a.Send(fmt.Sprintf("%d\r", newest))
@@ -236,7 +242,7 @@ func parseSectors(route string) ([]int, error) {
 	parts := strings.Split(route, " > ")
 	sectors := make([]int, len(parts))
 	for i := range parts {
-		sector, err := strconv.Atoi(parts[i])
+		sector, err := strconv.Atoi(strings.Trim(parts[i], "()"))
 		if err != nil {
 			return nil, err
 		}
