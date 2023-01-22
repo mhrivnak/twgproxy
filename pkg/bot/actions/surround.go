@@ -44,7 +44,6 @@ func (s *surround) run(ctx context.Context) {
 		return
 	}
 
-	s.actuator.Data.SectorLock.Lock()
 	sector, ok := s.actuator.Data.GetSector(s.actuator.Data.Status.Sector)
 	if !ok {
 		fmt.Println("current sector not in cache")
@@ -67,8 +66,6 @@ func (s *surround) run(ctx context.Context) {
 			needFigs = append(needFigs, *neighbor)
 		}
 	}
-
-	s.actuator.Data.SectorLock.Unlock()
 
 	// sort so we visit the sectors with the most warps first. That gives the
 	// opponent being surrounded fewer options for where to run.
@@ -103,6 +100,8 @@ func (s *surround) run(ctx context.Context) {
 		}
 		select {
 		case <-s.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(n.ID)):
+		case <-s.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.STOPINSECTORPROMPT):
+			s.actuator.Send("\r")
 		case <-ctx.Done():
 			fmt.Println(ctx.Err())
 			return

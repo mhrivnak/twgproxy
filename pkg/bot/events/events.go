@@ -33,15 +33,16 @@ const (
 	ROBBUSTED  RobResult = "rob busted"
 
 	// prompts
-	CITADELPROMPT    = "citadel prompt"
-	COMMANDPROMPT    = "command prompt"
-	COMPUTERPROMPT   = "computer prompt"
-	CORPPROMPT       = "corp prompt"
-	HWEMPORIUMPROMPT = "hardware emporium prompt"
-	MOMBOTPROMPT     = "MoM bot prompt"
-	PLANETPROMPT     = "planet prompt"
-	SHIPYARDPROMPT   = "shipyard prompt"
-	STARDOCKPROMPT   = "stardock prompt"
+	CITADELPROMPT      = "citadel prompt"
+	COMMANDPROMPT      = "command prompt"
+	COMPUTERPROMPT     = "computer prompt"
+	CORPPROMPT         = "corp prompt"
+	HWEMPORIUMPROMPT   = "hardware emporium prompt"
+	MOMBOTPROMPT       = "MoM bot prompt"
+	PLANETPROMPT       = "planet prompt"
+	SHIPYARDPROMPT     = "shipyard prompt"
+	STARDOCKPROMPT     = "stardock prompt"
+	STOPINSECTORPROMPT = "stop in this sector prompt"
 )
 
 type Event struct {

@@ -419,6 +419,8 @@ func (b *Bot) checkForPrompt(line string) {
 		e.ID = events.STARDOCKPROMPT
 	case "<Shipyards> ":
 		e.ID = events.SHIPYARDPROMPT
+	case "Stop in this":
+		e.ID = events.STOPINSECTORPROMPT
 	}
 	if e.ID != "" {
 		b.Broker.Publish(&e)
