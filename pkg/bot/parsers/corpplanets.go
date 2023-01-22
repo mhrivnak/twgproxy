@@ -61,10 +61,13 @@ func (p *ParseCorpPlanetsDisplay) finalize() {
 			fmt.Println(line)
 			return
 		}
-		parts1 := corpPlanetListLine1.FindStringSubmatch(lines[i+1])
+		parts1 := corpPlanetListLine1.FindStringSubmatch(fixVolcanoOre(lines[i+1]))
 		if len(parts1) != 5 {
 			fmt.Printf("error parsing line 1 of planet entry: got %d parts\n", len(parts1))
 			fmt.Println(lines[i+1])
+			if fixVolcanoOre(lines[i+1]) != lines[i+1] {
+				fmt.Printf("fixed line was: %s\n", fixVolcanoOre(lines[i+1]))
+			}
 			return
 		}
 		pid, err := strconv.Atoi(parts0[2])
@@ -142,4 +145,11 @@ func summaryToInt(n string) (int, error) {
 		return 0, err
 	}
 	return ret * factor, nil
+}
+
+// fixVolcanoOre fixes a situation where two columns run together becaue the
+// column spacing isn't wide enough, and the game for some reason represents the
+// amount of ore on a volcanic planet as "1,000T" instead of "1M".
+func fixVolcanoOre(line string) string {
+	return strings.Replace(line, "01,000T", "0 1M", 1)
 }
