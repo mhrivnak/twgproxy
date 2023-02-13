@@ -10,10 +10,13 @@ type EventKind string
 type RobResult string
 
 const (
+	BLINDJUMP             EventKind = "blind jump"
 	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
 	DENSITYDISPLAY        EventKind = "density report display"
+	DETONATORBUYMAX       EventKind = "detonator max to buy"
 	FIGDEPLOY             EventKind = "fig deploy display"
 	FIGHIT                EventKind = "fig hit"
+	GTORPBUYMAX           EventKind = "gtorp max to buy"
 	MBOTNOTHINGTOSELL     EventKind = "MoM bot nothing to sell"
 	MBOTTRADEDONE         EventKind = "MoM bot trade done"
 	PLANETCREATE          EventKind = "planet create"
@@ -26,6 +29,8 @@ const (
 	ROBRESULT             EventKind = "rob result"
 	ROUTEDISPLAY          EventKind = "route display"
 	SECTORDISPLAY         EventKind = "sector display"
+	TWARPLOCKED           EventKind = "twarp locked"
+	TWARPLOWFUEL          EventKind = "twarp not enough fuel"
 	TWXSCRIPTTERM         EventKind = "twx script terminated"
 
 	ROBSUCCESS RobResult = "rob success"

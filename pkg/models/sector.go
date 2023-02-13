@@ -45,3 +45,12 @@ func (s *Sector) IsSafe() bool {
 	}
 	return true
 }
+
+func (s *Sector) IsAdjacent(other int) bool {
+	for _, warp := range s.Warps {
+		if other == warp {
+			return true
+		}
+	}
+	return false
+}

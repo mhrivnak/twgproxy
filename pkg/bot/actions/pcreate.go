@@ -40,8 +40,11 @@ func (p *pCreate) run(ctx context.Context) {
 
 	for len(p.classes) > 0 {
 		if p.actuator.Data.Status.GTorps == 0 || p.actuator.Data.Status.AtmDts == 0 {
-			fmt.Println("Out of gtorps or atomic detonators")
-			break
+			err := p.replenish(ctx)
+			if err != nil {
+				fmt.Printf("failed to replenish: %s\n", err.Error())
+				return
+			}
 		}
 
 		p.actuator.Send("uy")
@@ -75,4 +78,13 @@ func (p *pCreate) run(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (p *pCreate) replenish(ctx context.Context) error {
+	sector := p.actuator.Data.Status.Sector
+	p.actuator.GoToSD(ctx)
+	p.actuator.BuyGTorpsAndDetonators(ctx)
+	// request quick stats so the status gets updated with replenished values
+	p.actuator.Send("/")
+	return p.actuator.Twarp(ctx, sector)
 }

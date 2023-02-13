@@ -6,16 +6,17 @@ import (
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
+	"github.com/mhrivnak/twgproxy/pkg/models"
 )
 
 type ptrade struct {
 	actuator *actuator.Actuator
 	planetID int
-	product  ProductType
+	product  models.ProductType
 	done     chan struct{}
 }
 
-func NewPTrade(planetID int, product ProductType, actuator *actuator.Actuator) Action {
+func NewPTrade(planetID int, product models.ProductType, actuator *actuator.Actuator) Action {
 	done := make(chan struct{})
 	return &ptrade{
 		actuator: actuator,
@@ -72,7 +73,7 @@ func (p *ptrade) run(ctx context.Context) {
 	// wait for prompt before invoking mombot
 	<-wait
 
-	p.actuator.MombotSend(ctx, fmt.Sprintf("neg %s\r", ProductCharFromType(p.product)))
+	p.actuator.MombotSend(ctx, fmt.Sprintf("neg %s\r", p.product))
 
 	// wait for mombot to finish
 	select {

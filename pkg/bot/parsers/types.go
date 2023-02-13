@@ -3,6 +3,8 @@ package parsers
 import "strings"
 
 const (
+	BUYDETONATORS = "buy detonators"
+	BUYGTORPS     = "buy gtorps"
 	CORPPLANETS   = "corp planet display"
 	DENSITYSCAN   = "density scan"
 	FIGDEPLOY     = "fig deploy"

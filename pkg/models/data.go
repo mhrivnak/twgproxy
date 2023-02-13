@@ -13,11 +13,14 @@ const (
 type Data struct {
 	Planets    map[int]*Planet
 	Sectors    map[int]*Sector
+	Settings   Settings
 	Status     Status
 	PlanetLock sync.Mutex
 	SectorLock sync.Mutex
 }
 
+// GetSector returns a pointer to the requested Sector or nil, and a bool that
+// indicates if the Sector was found.
 func (d *Data) GetSector(sector int) (*Sector, bool) {
 	d.SectorLock.Lock()
 	defer d.SectorLock.Unlock()

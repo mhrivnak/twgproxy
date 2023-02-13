@@ -235,7 +235,89 @@ func (a *Actuator) Rob(ctx context.Context) {
 
 		a.Send(fmt.Sprintf("%d\r", credsToRob))
 	}
+}
 
+// BuyGTorpsAndDetonators buys the max gtorps and detonators. Must be run from
+// stardock sector. As an implementation detail, it declines to buy each item
+// once so the event parser can observe the max that's possible to buy.
+func (a *Actuator) BuyGTorpsAndDetonators(ctx context.Context) {
+	a.Send("psha\r")
+
+	select {
+	case <-ctx.Done():
+		return
+	case e := <-a.Broker.WaitFor(ctx, events.DETONATORBUYMAX, ""):
+		a.Send(fmt.Sprintf("a%d\r", e.DataInt))
+	}
+
+	a.Send("t\r")
+	select {
+	case <-ctx.Done():
+		return
+	case e := <-a.Broker.WaitFor(ctx, events.GTORPBUYMAX, ""):
+		a.Send(fmt.Sprintf("t%d\r", e.DataInt))
+	}
+	a.Send("qq")
+}
+
+func (a *Actuator) GoToSD(ctx context.Context) error {
+	for _, hop := range a.Data.Settings.HopsToSD {
+		err := a.Twarp(ctx, hop.Sector)
+		if err != nil {
+			return err
+		}
+		a.Land(hop.Planet)
+		a.Send("t\r\r1\rq")
+	}
+	a.Move(ctx, 8657, false)
+	return nil
+}
+
+func (a *Actuator) Twarp(ctx context.Context, destination int) error {
+	sector, ok := a.Data.GetSector(a.Data.Status.Sector)
+	if !ok {
+		return fmt.Errorf("current sector not in cache")
+	}
+
+	// nothing to do
+	if sector.ID == destination {
+		return nil
+	}
+
+	a.Send(fmt.Sprintf("%d\r", destination))
+	// if it's adjacent, no need for twarp
+	if sector.IsAdjacent(destination) {
+		return nil
+	}
+
+	a.Send("y")
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-a.Broker.WaitFor(ctx, events.BLINDJUMP, ""):
+		a.Send("n")
+		return fmt.Errorf("aborting due to blind jump")
+	case <-a.Broker.WaitFor(ctx, events.BLINDJUMP, ""):
+		return fmt.Errorf("not enough fuel for the jump")
+	case <-a.Broker.WaitFor(ctx, events.TWARPLOCKED, ""):
+		a.Send("y")
+	}
+	return nil
+}
+
+func (a *Actuator) MombotPlanetSell(ctx context.Context, product models.ProductType) {
+	a.MombotSend(ctx, fmt.Sprintf("neg %s\r", product))
+
+	// wait for mombot to finish
+	select {
+	case <-ctx.Done():
+		return
+	case <-a.Broker.WaitFor(ctx, events.MBOTTRADEDONE, ""):
+		return
+	case <-a.Broker.WaitFor(ctx, events.MBOTNOTHINGTOSELL, ""):
+		return
+	}
 }
 
 func parseSectors(route string) ([]int, error) {

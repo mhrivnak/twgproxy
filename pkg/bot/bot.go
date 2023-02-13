@@ -231,7 +231,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 		return actions.NewPDrop(&b.Actuator)
 	case []byte("n")[0]:
 		if len(command) == 2 {
-			product, err := actions.ProductTypeFromChar(string(command[1]))
+			product, err := models.ProductTypeFromChar(string(command[1]))
 			if err != nil {
 				fmt.Println(err.Error())
 				return nil
@@ -244,7 +244,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 				fmt.Println(err.Error())
 				return nil
 			}
-			product, err := actions.ProductTypeFromChar(string(command[1]))
+			product, err := models.ProductTypeFromChar(string(command[1]))
 			if err != nil {
 				fmt.Println(err.Error())
 				return nil
@@ -318,6 +318,53 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return actions.NewRobPair(otherPort, &b.Actuator)
 		}
+	case []byte("s")[0]:
+		if len(command) == 1 {
+			j, err := json.Marshal(b.data.Settings)
+			if err != nil {
+				fmt.Println("failed to marshal Settings")
+				return nil
+			}
+			fmt.Println(string(j))
+			return nil
+		}
+		switch command[1] {
+		case []byte("t")[0]:
+			parts := strings.Split(string(command[2:]), ",")
+			if len(parts) == 1 {
+				b.data.Settings.HopsToSD = []models.TwarpHop{}
+				return nil
+			}
+			if len(parts)%2 != 0 {
+				fmt.Println("did not get an even number of arguments")
+				return nil
+			}
+			hops := []models.TwarpHop{}
+			hop := models.TwarpHop{}
+			for i, arg := range parts {
+				argInt, err := strconv.Atoi(arg)
+				if err != nil {
+					fmt.Println(err.Error())
+					return nil
+				}
+
+				if i%2 == 0 {
+					hop = models.TwarpHop{
+						Sector: argInt,
+					}
+				} else {
+					hop.Planet = argInt
+					hops = append(hops, hop)
+				}
+			}
+			b.data.Settings.HopsToSD = hops
+			return nil
+		}
+	case []byte("g")[0]:
+		switch command[1] {
+		case []byte("s")[0]:
+			go b.Actuator.GoToSD(ctx)
+		}
 	}
 	return nil
 }
@@ -370,6 +417,16 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.ROBRESULT] = parsers.NewRobResultParser(b.Broker)
 	case strings.HasPrefix(clean, "Script terminated:"):
 		b.Broker.Publish(&events.Event{Kind: events.TWXSCRIPTTERM})
+	case strings.HasPrefix(clean, "*** WARNING *** No locating beam found for sector"):
+		b.Broker.Publish(&events.Event{Kind: events.BLINDJUMP})
+	case strings.HasPrefix(clean, "Locating beam pinpointed, TransWarp Locked."):
+		b.Broker.Publish(&events.Event{Kind: events.TWARPLOCKED})
+	case strings.HasPrefix(clean, "You do not have enough Fuel Ore to make the jump."):
+		b.Broker.Publish(&events.Event{Kind: events.TWARPLOWFUEL})
+	case strings.HasPrefix(clean, "How many Atomic Detonators do you want"):
+		b.parsers[parsers.BUYDETONATORS] = parsers.NewParseBuyDetonators(b.Broker)
+	case strings.HasPrefix(clean, "How many Genesis Torpedoes do you want"):
+		b.parsers[parsers.BUYDETONATORS] = parsers.NewParseBuyGTorp(b.Broker)
 	}
 
 	for k, parser := range b.parsers {

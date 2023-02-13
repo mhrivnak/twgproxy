@@ -133,6 +133,7 @@ func (p *pRouteTrade) run(ctx context.Context) {
 
 			if report.Org.Percent != 100 {
 				fmt.Printf("skipping port at %d percent\n", report.Org.Percent)
+				continue
 			}
 
 			//pick a planet
@@ -145,12 +146,15 @@ func (p *pRouteTrade) run(ctx context.Context) {
 			fmt.Printf("chose planet %d in sector %d\n", planet.ID, sectorID)
 
 			// run the ptrade action
-			ptrade := NewPTrade(planet.ID, ORG, p.actuator)
+			wait := p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.PLANETPROMPT)
+			p.actuator.Land(planet.ID)
 			select {
+			case <-wait:
 			case <-ctx.Done():
 				return
-			case <-ptrade.Start(ctx):
 			}
+
+			p.actuator.MombotPlanetSell(ctx, models.ORG)
 
 			// lift off from planet
 			p.actuator.Send("q")
