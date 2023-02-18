@@ -145,12 +145,12 @@ func (b *Bot) Start(done chan<- interface{}) {
 									break loop
 								case char = <-input:
 									// if user pressed x, stop. Ignore other input.
-									if char == []byte("x")[0] {
+									if char == byte('x') {
 										cancelCtx()
 										fmt.Println("cancelled action")
 										break loop
 									}
-									if char == []byte("?")[0] {
+									if char == byte('?') {
 										for _, w := range b.Broker.Waits() {
 											fmt.Printf("waiting on Kind: %s  ID: %s\n", w.Kind, w.ID)
 										}
@@ -182,11 +182,11 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 	}
 
 	switch command[0] {
-	case []byte("a")[0]:
+	case byte('a'):
 		switch command[1] {
-		case []byte("u")[0]:
+		case byte('u'):
 			return actions.NewUnsurround(&b.Actuator)
-		case []byte("s")[0]:
+		case byte('s'):
 			figs, err := strconv.Atoi(string(command[2:]))
 			if err != nil {
 				fmt.Printf("failed to parse number of figs: %s", err.Error())
@@ -194,8 +194,8 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return actions.NewSurround(figs, &b.Actuator)
 		}
-	case []byte("p")[0]:
-		if len(command) > 2 && command[1] == []byte("r")[0] {
+	case byte('p'):
+		if len(command) > 2 && command[1] == byte('r') {
 			action, err := actions.NewPRouteTrade(string(command[2:]), &b.Actuator)
 			if err != nil {
 				fmt.Printf("failed to run planet route trade: %s\n", err.Error())
@@ -203,7 +203,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return action
 		}
-		if len(command) > 2 && command[1] == []byte("c")[0] {
+		if len(command) > 2 && command[1] == byte('c') {
 			args, err := parsePCreateArgs(string(command[2:]))
 			if err != nil {
 				fmt.Printf("failed to parse planet create args: %s\n", err.Error())
@@ -219,7 +219,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return actions.NewPFigDeploy(figs, &b.Actuator)
 		}
-		if len(command) > 2 && command[1] == []byte("u")[0] {
+		if len(command) > 2 && command[1] == byte('u') {
 			upgrade, err := actions.NewPUpgrade(string(command[2:]), &b.Actuator)
 			if err != nil {
 				fmt.Printf("failed to run mass upgrade route: %s\n", err.Error())
@@ -227,9 +227,9 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return upgrade
 		}
-	case []byte("d")[0]:
+	case byte('d'):
 		return actions.NewPDrop(&b.Actuator)
-	case []byte("n")[0]:
+	case byte('n'):
 		if len(command) == 2 {
 			product, err := models.ProductTypeFromChar(string(command[1]))
 			if err != nil {
@@ -252,14 +252,14 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			return actions.NewPTrade(pid, product, &b.Actuator)
 		}
 
-	case []byte("m")[0]:
+	case byte('m'):
 		dest, err := strconv.Atoi(string(command[1:]))
 		if err != nil {
 			fmt.Printf("failed to parse sector from command %s\n", string(command))
 			return nil
 		}
 		return actions.NewMove(dest, &b.Actuator)
-	case []byte("i")[0]:
+	case byte('i'):
 		if len(command) == 1 {
 			j, err := json.Marshal(b.data.Status)
 			if err != nil {
@@ -270,7 +270,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			return nil
 		}
 		switch command[1] {
-		case []byte("s")[0]:
+		case byte('s'):
 			sector, err := strconv.Atoi(string(command[2:]))
 			if err != nil {
 				fmt.Printf("failed to parse sector from command %s\n", string(command))
@@ -287,7 +287,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 				return nil
 			}
 			fmt.Println(string(j))
-		case []byte("p")[0]:
+		case byte('p'):
 			planetID, err := strconv.Atoi(string(command[2:]))
 			if err != nil {
 				fmt.Printf("failed to parse planet from command %s\n", string(command))
@@ -305,11 +305,11 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			fmt.Println(string(j))
 		}
-	case []byte("r")[0]:
+	case byte('r'):
 		if len(command) == 1 {
 			return actions.NewRob(&b.Actuator)
 		}
-		if len(command) > 2 && command[1] == []byte("p")[0] {
+		if len(command) > 2 && command[1] == byte('p') {
 			// rob pair
 			otherPort, err := strconv.Atoi((string(command[2:])))
 			if err != nil {
@@ -318,7 +318,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			}
 			return actions.NewRobPair(otherPort, &b.Actuator)
 		}
-	case []byte("s")[0]:
+	case byte('s'):
 		if len(command) == 1 {
 			j, err := json.Marshal(b.data.Settings)
 			if err != nil {
@@ -329,7 +329,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			return nil
 		}
 		switch command[1] {
-		case []byte("t")[0]:
+		case byte('t'):
 			parts := strings.Split(string(command[2:]), ",")
 			if len(parts) == 1 {
 				b.data.Settings.HopsToSD = []models.TwarpHop{}
@@ -360,9 +360,9 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 			b.data.Settings.HopsToSD = hops
 			return nil
 		}
-	case []byte("g")[0]:
+	case byte('g'):
 		switch command[1] {
-		case []byte("s")[0]:
+		case byte('s'):
 			go b.Actuator.GoToSD(ctx)
 		}
 	}
