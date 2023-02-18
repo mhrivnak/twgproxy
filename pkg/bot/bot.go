@@ -20,7 +20,6 @@ import (
 
 type Bot struct {
 	gameReader    io.Reader
-	userReader    io.Reader
 	commandWriter io.Writer
 	parsers       map[string]parsers.Parser
 	data          *models.Data
@@ -28,13 +27,12 @@ type Bot struct {
 	Broker        *events.Broker
 }
 
-func New(game, user io.Reader, command io.Writer) *Bot {
+func New(game io.Reader, command io.Writer) *Bot {
 	data := models.NewData()
 	broker := &events.Broker{}
 
 	return &Bot{
 		gameReader:    game,
-		userReader:    user,
 		commandWriter: command,
 		parsers:       map[string]parsers.Parser{},
 		data:          data,
@@ -61,6 +59,7 @@ func byteChan(r io.Reader) <-chan byte {
 			if err != nil {
 				if err == io.EOF {
 					fmt.Println("EOF from user client")
+					close(c)
 					return
 				}
 				fmt.Println(err.Error())
@@ -72,7 +71,7 @@ func byteChan(r io.Reader) <-chan byte {
 	return c
 }
 
-func (b *Bot) Start(done chan<- interface{}) {
+func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
 	go func() {
 		defer close(done)
 
@@ -114,11 +113,10 @@ func (b *Bot) Start(done chan<- interface{}) {
 		defer close(done)
 
 		// parse user input
-		input := byteChan(b.userReader)
+		input := byteChan(userReader)
 
 		data := []byte{}
-		for {
-			char := <-input
+		for char := range input {
 			switch int(char) {
 			case 92: // "\"
 				data = []byte{char}
