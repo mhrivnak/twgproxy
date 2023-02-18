@@ -131,30 +131,10 @@ func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
 					data = append(data, char)
 					if bytes.ContainsAny([]byte{char}, "\n\r") {
 						// parse the command and run an action if one is identified
-						ctx, cancelCtx := context.WithCancel(context.Background())
-						action := b.ParseCommand(ctx, data[1:len(data)-1])
+						action := b.ParseCommand(data[1 : len(data)-1])
 						data = []byte{}
 						if action != nil {
-							done := action.Start(ctx)
-						loop:
-							for {
-								select {
-								case <-done:
-									break loop
-								case char = <-input:
-									// if user pressed x, stop. Ignore other input.
-									if char == byte('x') {
-										cancelCtx()
-										fmt.Println("cancelled action")
-										break loop
-									}
-									if char == byte('?') {
-										for _, w := range b.Broker.Waits() {
-											fmt.Printf("waiting on Kind: %s  ID: %s\n", w.Kind, w.ID)
-										}
-									}
-								}
-							}
+							b.runAction(action, input)
 						}
 					}
 				} else {
@@ -172,7 +152,33 @@ func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
 	}()
 }
 
-func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
+// runAction runs the action until it completes, unless the user cancels it by
+// pressing "x".
+func (b *Bot) runAction(action actions.Action, input <-chan byte) {
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
+	actionDone := action.Start(ctx)
+	for {
+		select {
+		case <-actionDone:
+			return
+		case char := <-input:
+			// if user pressed x, stop.
+			if char == byte('x') {
+				fmt.Println("cancelled action")
+				return
+			}
+			// if user pressed ?, print what we're waiting on
+			if char == byte('?') {
+				for _, w := range b.Broker.Waits() {
+					fmt.Printf("waiting on Kind: %s  ID: %s\n", w.Kind, w.ID)
+				}
+			}
+		}
+	}
+}
+
+func (b *Bot) ParseCommand(command []byte) actions.Action {
 	fmt.Printf("Parsing command: %s\n", string(command))
 
 	if len(command) == 0 {
@@ -361,7 +367,7 @@ func (b *Bot) ParseCommand(ctx context.Context, command []byte) actions.Action {
 	case byte('g'):
 		switch command[1] {
 		case byte('s'):
-			go b.Actuator.GoToSD(ctx)
+			return actions.WrapErr(b.Actuator.GoToSD)
 		}
 	}
 	return nil
