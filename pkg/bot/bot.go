@@ -265,6 +265,13 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			return nil
 		}
 		return actions.NewMove(dest, &b.Actuator)
+	case byte('e'):
+		dest, err := strconv.Atoi(string(command[1:]))
+		if err != nil {
+			fmt.Printf("failed to parse sector from command %s\n", string(command))
+			return nil
+		}
+		return actions.NewExplore(dest, &b.Actuator)
 	case byte('i'):
 		if len(command) == 1 {
 			j, err := json.Marshal(b.data.Status)
