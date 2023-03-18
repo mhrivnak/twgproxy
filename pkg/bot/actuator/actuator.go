@@ -217,7 +217,9 @@ func (a *Actuator) Rob(ctx context.Context) {
 		break
 	case e := <-a.Broker.WaitFor(ctx, events.PORTROBCREDS, ""):
 		creds := e.DataInt
-		if creds < 700000 {
+		// Make sure the port has at least 1/3 the max that can be robbed, to
+		// make the risk worthwhile.
+		if creds < a.Data.Status.Exp {
 			fmt.Println("not enough creds to rob")
 			a.Send("0\r")
 			a.Broker.Publish(&events.Event{
@@ -234,6 +236,14 @@ func (a *Actuator) Rob(ctx context.Context) {
 		}
 
 		a.Send(fmt.Sprintf("%d\r", credsToRob))
+	}
+}
+
+func (a *Actuator) Express(destination int) {
+	if a.Data.Status.TWarp == models.TWarpTypeNone {
+		a.Send(fmt.Sprintf("%d\re", destination))
+	} else {
+		a.Send(fmt.Sprintf("%d\rne", destination))
 	}
 }
 

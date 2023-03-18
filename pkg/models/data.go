@@ -10,6 +10,14 @@ const (
 	LRSNONE    LRSType = "no scanner"
 )
 
+type TWarpType string
+
+const (
+	TWarpTypeNone TWarpType = "none"
+	TWarpType1    TWarpType = "type 1"
+	TWarpType2    TWarpType = "type 2"
+)
+
 type Data struct {
 	Planets    map[int]*Planet
 	Sectors    map[int]*Sector
@@ -46,4 +54,5 @@ type Status struct {
 	GTorps  int
 	AtmDts  int
 	LRS     LRSType
+	TWarp   TWarpType
 }

@@ -32,12 +32,14 @@ const (
 	TWARPLOCKED           EventKind = "twarp locked"
 	TWARPLOWFUEL          EventKind = "twarp not enough fuel"
 	TWXSCRIPTTERM         EventKind = "twx script terminated"
+	WARPSINTOSECTOR       EventKind = "warps into sector"
 
 	ROBSUCCESS RobResult = "rob success"
 	ROBABORT   RobResult = "rob abort"
 	ROBBUSTED  RobResult = "rob busted"
 
 	// prompts
+	ATTACKPROMPT       = "attack prompt"
 	CITADELPROMPT      = "citadel prompt"
 	COMMANDPROMPT      = "command prompt"
 	COMPUTERPROMPT     = "computer prompt"

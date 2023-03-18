@@ -113,6 +113,15 @@ func (p *ParseQuickStats) finalize() {
 			case "Holo":
 				p.data.Status.LRS = models.LRSHOLO
 			}
+		case "TWarp":
+			switch parts[2] {
+			case "No":
+				p.data.Status.TWarp = models.TWarpTypeNone
+			case "1":
+				p.data.Status.TWarp = models.TWarpType1
+			case "2":
+				p.data.Status.TWarp = models.TWarpType2
+			}
 		}
 	}
 	p.broker.Publish(&events.Event{

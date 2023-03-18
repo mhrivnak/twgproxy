@@ -151,5 +151,5 @@ func summaryToInt(n string) (int, error) {
 // column spacing isn't wide enough, and the game for some reason represents the
 // amount of ore on a volcanic planet as "1,000T" instead of "1M".
 func fixVolcanoOre(line string) string {
-	return strings.Replace(line, "01,000T", "0 1M", 1)
+	return strings.Replace(line, "1,000T", " 1M", 1)
 }

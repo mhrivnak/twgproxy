@@ -187,16 +187,18 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 
 	switch command[0] {
 	case byte('a'):
-		switch command[1] {
-		case byte('u'):
-			return actions.NewUnsurround(&b.Actuator)
-		case byte('s'):
-			figs, err := strconv.Atoi(string(command[2:]))
-			if err != nil {
-				fmt.Printf("failed to parse number of figs: %s", err.Error())
-				return nil
+		if len(command) > 1 {
+			switch command[1] {
+			case byte('u'):
+				return actions.NewUnsurround(&b.Actuator)
+			case byte('s'):
+				figs, err := strconv.Atoi(string(command[2:]))
+				if err != nil {
+					fmt.Printf("failed to parse number of figs: %s", err.Error())
+					return nil
+				}
+				return actions.NewSurround(figs, &b.Actuator)
 			}
-			return actions.NewSurround(figs, &b.Actuator)
 		}
 	case byte('p'):
 		if len(command) > 2 && command[1] == byte('r') {
@@ -285,7 +287,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				fmt.Printf("Don't have info on sector %d\n", sector)
 				return nil
 			}
-			j, err := json.Marshal(s)
+			j, err := json.MarshalIndent(s, "", "  ")
 			if err != nil {
 				fmt.Println("failed to marshal Sector")
 				return nil

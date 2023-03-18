@@ -74,11 +74,6 @@ func (s *surround) run(ctx context.Context) {
 	})
 
 	for i, n := range needFigs {
-		moveString := fmt.Sprintf("%d\r", n.ID)
-		if i > 0 {
-			moveString = fmt.Sprintf("%d\rne", n.ID)
-		}
-
 		current, ok := s.actuator.Data.GetSector(s.actuator.Data.Status.Sector)
 		if !ok {
 			fmt.Println("sector not in cache")
@@ -93,11 +88,15 @@ func (s *surround) run(ctx context.Context) {
 			}
 		}
 
-		if directReturn || i == 0 {
-			s.actuator.Send(moveString)
-		} else {
+		switch {
+		case i == 0:
+			s.actuator.Send(fmt.Sprintf("%d\r", n.ID))
+		case directReturn:
+			s.actuator.Express(n.ID)
+		default:
 			s.actuator.Move(ctx, n.ID, false)
 		}
+
 		select {
 		case <-s.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(n.ID)):
 		case <-s.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.STOPINSECTORPROMPT):

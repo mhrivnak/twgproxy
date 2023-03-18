@@ -28,6 +28,8 @@ var portType *regexp.Regexp = regexp.MustCompile(`^Ports   : [a-zA-Z0-9 '-]+, Cl
 var figInfo *regexp.Regexp = regexp.MustCompile(`^Fighters: ([0-9,]+) \((.+?)\) \[([A-Za-z]+)\]`)
 var minesInfo *regexp.Regexp = regexp.MustCompile(`^Mines   : ([0-9]+) \(Type 1 Armid\) \(([A-Za-z ]+)\)`)
 var warpsInfo *regexp.Regexp = regexp.MustCompile(`^Warps to Sector\(s\) :  ([()0-9 -]+)`)
+var traderInfo0 *regexp.Regexp = regexp.MustCompile(`([a-zA-Z0-9 ]+), w/ ([0-9,]+) ftrs`)
+var traderInfo1 *regexp.Regexp = regexp.MustCompile(`\(([a-zA-Z ]+)\)`)
 
 func (p *ParseSector) Parse(line string) error {
 	p.lines = append(p.lines, line)
@@ -69,6 +71,11 @@ func (p *ParseSector) finalize() {
 		ID: num,
 	}
 
+	var parsingTraderType models.TraderType
+	var parsingTraders bool
+	var parsingTradersIndex int
+	var halfParsedTrader *models.Trader
+
 	for _, line := range p.lines {
 		parts = portType.FindStringSubmatch(line)
 		if len(parts) == 2 {
@@ -91,6 +98,7 @@ func (p *ParseSector) finalize() {
 			case "yours", "belong to your Corp":
 				s.FigsFriendly = true
 			}
+			continue
 		}
 
 		parts = minesInfo.FindStringSubmatch(line)
@@ -104,6 +112,7 @@ func (p *ParseSector) finalize() {
 			case "yours", "belong to your Corp":
 				s.MinesFriendly = true
 			}
+			continue
 		}
 
 		parts = warpsInfo.FindStringSubmatch(line)
@@ -118,6 +127,60 @@ func (p *ParseSector) finalize() {
 				s.Warps = append(s.Warps, warp)
 			}
 			s.WarpCount = len(s.Warps)
+			continue
+		}
+
+		if strings.HasPrefix(line, "Alien Tr:") {
+			parsingTraderType = models.TraderTypeAlien
+			parsingTraders = true
+			parsingTradersIndex = 0
+		} else if strings.HasPrefix(line, "Traders :") {
+			parsingTraderType = models.TraderTypeNormal
+			parsingTraders = true
+			parsingTradersIndex = 0
+		} else if strings.HasPrefix(line, "Grey    :") {
+			parsingTraderType = models.TraderTypeGrey
+			parsingTraders = true
+			parsingTradersIndex = 0
+		} else if strings.HasPrefix(line, "Ferrengi:") {
+			parsingTraderType = models.TraderTypeFerrengi
+			parsingTraders = true
+			parsingTradersIndex = 0
+		} else if len(line) == 0 || !strings.HasPrefix(line, "          ") {
+			parsingTraders = false
+		}
+
+		if parsingTraders {
+			if parsingTradersIndex%2 == 0 {
+				parts := traderInfo0.FindStringSubmatch(line)
+				if len(parts) != 3 {
+					fmt.Printf("failed to parse trader info: %s\n", line)
+					parsingTraders = false
+					continue
+				}
+				figs, err := strconv.Atoi(removeCommas(parts[2]))
+				if err != nil {
+					fmt.Printf("failed to parse trader figs: %s\n", line)
+					parsingTraders = false
+					continue
+				}
+				halfParsedTrader = &models.Trader{
+					Name: models.StripTitleFromName(strings.TrimSpace(parts[1])),
+					Figs: figs,
+					Type: parsingTraderType,
+				}
+			} else {
+				parts := traderInfo1.FindStringSubmatch(line)
+				if len(parts) != 2 {
+					fmt.Printf("failed to parse trader info: %s\n", line)
+					parsingTraders = false
+					continue
+				}
+				halfParsedTrader.ShipType = models.ShipTypeFromString(parts[1])
+				s.Traders = append(s.Traders, *halfParsedTrader)
+				halfParsedTrader = nil
+			}
+			parsingTradersIndex += 1
 		}
 	}
 
