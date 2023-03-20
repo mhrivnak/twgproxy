@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
@@ -328,6 +329,61 @@ func (a *Actuator) MombotPlanetSell(ctx context.Context, product models.ProductT
 	case <-a.Broker.WaitFor(ctx, events.MBOTNOTHINGTOSELL, ""):
 		return
 	}
+}
+
+func (a *Actuator) StripPlanet(ctx context.Context, fromID, toID int) error {
+	wait := a.Broker.WaitFor(ctx, events.PLANETDISPLAY, "")
+	a.Send(fmt.Sprintf("l%d\r", fromID))
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-wait:
+	case <-time.After(time.Second):
+		// for some reason the planet display event is getting missed a lot.
+		// fallback is to cause another planet display and just wait a second to
+		// be confident it was parsed.
+		fmt.Println("timeout")
+		a.Send("\r")
+		<-time.After(time.Second)
+	}
+
+	a.Data.PlanetLock.Lock()
+	from, ok := a.Data.Planets[fromID]
+	a.Data.PlanetLock.Unlock()
+	if !ok {
+		return fmt.Errorf("from planet not in cache")
+	}
+
+	holds := a.Data.Status.Holds
+
+	for q := from.Ore; q > 0; q -= holds {
+		if q < holds {
+			a.Send(fmt.Sprintf("tnt1%d\rq", q))
+		} else {
+			a.Send("tnt1\rq")
+		}
+		a.Send(fmt.Sprintf("l%d\rtnl1\rql%d\r", toID, fromID))
+	}
+
+	for q := from.Org; q > 0; q -= holds {
+		if q < holds {
+			a.Send(fmt.Sprintf("tnt2%d\rq", q))
+		} else {
+			a.Send("tnt2\rq")
+		}
+		a.Send(fmt.Sprintf("l%d\rtnl2\rql%d\r", toID, fromID))
+	}
+
+	for q := from.Equ; q > 0; q -= holds {
+		if q < holds {
+			a.Send(fmt.Sprintf("tnt3%d\rq", q))
+		} else {
+			a.Send("tnt3\rq")
+		}
+		a.Send(fmt.Sprintf("l%d\rtnl3\rql%d\r", toID, fromID))
+	}
+
+	return nil
 }
 
 func parseSectors(route string) ([]int, error) {

@@ -201,6 +201,18 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 		}
 	case byte('p'):
+		if len(command) > 2 && command[1] == byte('s') {
+			fromID, toID, err := parsePStripArgs(string(command[2:]))
+			if err != nil {
+				fmt.Printf("failed to parse pstrip args: %s\n", err.Error())
+				return nil
+			}
+			// bulk pstrip creates and destroys planets to strip
+			if fromID == 0 {
+				return actions.NewPStripBulk(toID, &b.Actuator)
+			}
+			return actions.NewPStrip(fromID, toID, &b.Actuator)
+		}
 		if len(command) > 2 && command[1] == byte('r') {
 			action, err := actions.NewPRouteTrade(string(command[2:]), &b.Actuator)
 			if err != nil {
@@ -559,4 +571,22 @@ func parsePCreateArgs(args string) (map[string]int, error) {
 		}
 	}
 	return ret, nil
+}
+
+func parsePStripArgs(args string) (int, int, error) {
+	parts := strings.Split(args, ",")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("got %d args; need exactly 2", len(parts))
+	}
+
+	fromID, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, err
+	}
+	toID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return fromID, toID, nil
 }
