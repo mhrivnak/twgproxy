@@ -221,6 +221,14 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 			return action
 		}
+		if len(command) > 2 && command[1] == byte('w') {
+			action, err := actions.NewPWarpSell(string(command[2:]), &b.Actuator)
+			if err != nil {
+				fmt.Printf("failed to run planet route trade: %s\n", err.Error())
+				return nil
+			}
+			return action
+		}
 		if len(command) > 2 && command[1] == byte('c') {
 			args, err := parsePCreateArgs(string(command[2:]))
 			if err != nil {
@@ -452,6 +460,8 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.BUYDETONATORS] = parsers.NewParseBuyDetonators(b.Broker)
 	case strings.HasPrefix(clean, "How many Genesis Torpedoes do you want"):
 		b.parsers[parsers.BUYDETONATORS] = parsers.NewParseBuyGTorp(b.Broker)
+	case strings.Contains(clean, "Planet is now in sector"):
+		b.Broker.Publish(&events.Event{Kind: events.PLANETWARPCOMPLETE})
 	}
 
 	for k, parser := range b.parsers {

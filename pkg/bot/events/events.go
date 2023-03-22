@@ -22,6 +22,7 @@ const (
 	PLANETCREATE          EventKind = "planet create"
 	PLANETDISPLAY         EventKind = "planet display"
 	PLANETLANDINGDISPLAY  EventKind = "planet landing display"
+	PLANETWARPCOMPLETE    EventKind = "planet warp complete"
 	PORTREPORTDISPLAY     EventKind = "port report"
 	PORTROBCREDS          EventKind = "port rob creds"
 	PROMPTDISPLAY         EventKind = "prompt display"
