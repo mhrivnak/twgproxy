@@ -34,7 +34,13 @@ func (p *explore) run(ctx context.Context) {
 
 	for i := p.startSector; i <= 20000; i++ {
 		fmt.Printf("exploring to sector %d", i)
-		err := p.actuator.Move(ctx, i, true)
+		opts := actuator.MoveOptions{
+			DropFigs:      1,
+			MinFigs:       1000,
+			EnemyFigsMax:  1000,
+			EnemyMinesMax: 50,
+		}
+		err := p.actuator.Move(ctx, i, opts, true)
 		if err != nil {
 			fmt.Printf("error: %s", err.Error())
 			return

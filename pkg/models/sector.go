@@ -1,12 +1,15 @@
 package models
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type Sector struct {
 	ID            int
 	Figs          int
-	FigsType      string
 	FigsFriendly  bool
+	FigType       FigType
 	Mines         int
 	MinesFriendly bool
 	Port          *Port
@@ -14,6 +17,27 @@ type Sector struct {
 	WarpCount     int
 	Density       int
 	Traders       []Trader
+	IsFedSpace    bool
+}
+
+type FigType string
+
+const (
+	FigTypeToll      FigType = "Toll"
+	FigTypeOffensive FigType = "Offensive"
+	FigTypeDefensive FigType = "Defensive"
+)
+
+func FigTypeFromString(figtype string) (FigType, error) {
+	switch figtype {
+	case string(FigTypeToll):
+		return FigTypeToll, nil
+	case string(FigTypeOffensive):
+		return FigTypeOffensive, nil
+	case string(FigTypeDefensive):
+		return FigTypeDefensive, nil
+	}
+	return "", fmt.Errorf("unknown fig type: %s", figtype)
 }
 
 type Port struct {

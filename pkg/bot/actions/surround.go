@@ -94,7 +94,7 @@ func (s *surround) run(ctx context.Context) {
 		case directReturn:
 			s.actuator.Express(n.ID)
 		default:
-			s.actuator.Move(ctx, n.ID, false)
+			s.actuator.MoveSafe(ctx, n.ID, false)
 		}
 
 		select {

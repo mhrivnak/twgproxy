@@ -68,7 +68,8 @@ func (p *ParseSector) finalize() {
 	}
 
 	s := models.Sector{
-		ID: num,
+		ID:         num,
+		IsFedSpace: strings.Contains(p.lines[0], "The Federation"),
 	}
 
 	var parsingTraderType models.TraderType
@@ -93,7 +94,12 @@ func (p *ParseSector) finalize() {
 				return
 			}
 			s.Figs = count
-			s.FigsType = parts[3]
+			s.FigType, err = models.FigTypeFromString(parts[3])
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+
 			switch parts[2] {
 			case "yours", "belong to your Corp":
 				s.FigsFriendly = true

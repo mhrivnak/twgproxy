@@ -97,6 +97,7 @@ func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
 				case 62: // >
 					b.checkForMombotPrompt(string(line[:i+1]))
 				case 63: // ?
+					//fmt.Println(string(line[:i+1]))
 					if alreadyCheckedForPrompt {
 						continue
 					}
@@ -279,12 +280,26 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 		}
 
 	case byte('m'):
+		if len(command) > 1 && command[1] == byte('f') {
+			dest, err := strconv.Atoi(string(command[2:]))
+			if err != nil {
+				fmt.Printf("failed to parse sector from command %s\n", string(command))
+				return nil
+			}
+			opts := actuator.MoveOptions{
+				DropFigs:      1,
+				MinFigs:       5000,
+				EnemyFigsMax:  1000,
+				EnemyMinesMax: 50,
+			}
+			return actions.NewMove(dest, opts, &b.Actuator)
+		}
 		dest, err := strconv.Atoi(string(command[1:]))
 		if err != nil {
 			fmt.Printf("failed to parse sector from command %s\n", string(command))
 			return nil
 		}
-		return actions.NewMove(dest, &b.Actuator)
+		return actions.NewMove(dest, actuator.MoveOptions{}, &b.Actuator)
 	case byte('e'):
 		dest, err := strconv.Atoi(string(command[1:]))
 		if err != nil {
@@ -513,6 +528,8 @@ func (b *Bot) checkForPrompt(line string) {
 		e.ID = events.SHIPYARDPROMPT
 	case "Stop in this":
 		e.ID = events.STOPINSECTORPROMPT
+	case "Mined Sector":
+		e.ID = events.MINEDSECTORPROMPT
 	}
 	if e.ID != "" {
 		b.Broker.Publish(&e)

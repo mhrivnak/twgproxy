@@ -44,9 +44,9 @@ func (r *robPair) run(ctx context.Context) {
 			return
 		case <-r.actuator.Broker.WaitFor(ctx, events.ROBRESULT, string(events.ROBSUCCESS)):
 			if i%2 == 0 {
-				r.actuator.Move(ctx, r.otherPort, true)
+				r.actuator.MoveSafe(ctx, r.otherPort, true)
 			} else {
-				r.actuator.Move(ctx, startPort, true)
+				r.actuator.MoveSafe(ctx, startPort, true)
 			}
 		case <-ctx.Done():
 			return

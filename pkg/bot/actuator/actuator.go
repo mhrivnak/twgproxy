@@ -32,6 +32,10 @@ func (a *Actuator) Send(command string) error {
 	return err
 }
 
+func (a *Actuator) Sendf(command string, args ...any) error {
+	return a.Send(fmt.Sprintf(command, args...))
+}
+
 func (a *Actuator) Land(planetID int) {
 	a.Send(fmt.Sprintf("l%d\r", planetID))
 }
@@ -72,7 +76,7 @@ func (a *Actuator) RouteWalk(ctx context.Context, points []int, task func()) {
 		for i, sectorID := range route {
 			if i > 0 {
 				// move to the next sector
-				err = a.Move(ctx, sectorID, true)
+				err = a.MoveSafe(ctx, sectorID, true)
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -142,7 +146,18 @@ func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
 	}
 }
 
-func (a *Actuator) Move(ctx context.Context, dest int, block bool) error {
+type MoveOptions struct {
+	DropFigs      int
+	EnemyFigsMax  int
+	EnemyMinesMax int
+	MinFigs       int
+}
+
+func (a *Actuator) MoveSafe(ctx context.Context, dest int, block bool) error {
+	return a.Move(ctx, dest, MoveOptions{}, block)
+}
+
+func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block bool) error {
 	// make sure we know what kind of long range scanner is available
 	a.QuickStats(ctx)
 
@@ -153,8 +168,25 @@ func (a *Actuator) Move(ctx context.Context, dest int, block bool) error {
 		return err
 	}
 
+	stop := make(chan interface{})
+	defer close(stop)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-stop:
+				return
+			case <-a.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.MINEDSECTORPROMPT):
+				a.Send("\r")
+			}
+		}
+	}()
+
 	// ignore the first sector, which is the one we're in
 	for _, sector := range sectors[1:] {
+		attackCommand := ""
 		if a.Data.Status.LRS == models.LRSHOLO {
 			a.Send("sh")
 
@@ -164,15 +196,43 @@ func (a *Actuator) Move(ctx context.Context, dest int, block bool) error {
 				if !ok {
 					return fmt.Errorf("failed to get cached info on sector %d", sector)
 				}
-				if !sInfo.IsSafe() {
-					return fmt.Errorf("unsafe sector ahead")
+				switch {
+				case !sInfo.FigsFriendly && sInfo.Figs > opts.EnemyFigsMax:
+					return fmt.Errorf("too many enemy figs ahead")
+				case !sInfo.MinesFriendly && sInfo.Mines > opts.EnemyMinesMax:
+					return fmt.Errorf("too many enemy mines ahead")
+				}
+				if sInfo.Figs > 0 && !sInfo.FigsFriendly && sInfo.FigType != models.FigTypeOffensive {
+					attackCommand = "a999\r"
 				}
 			case <-ctx.Done():
 				return ctx.Err()
 			}
 		}
 
-		a.Send(fmt.Sprintf("%d\r", sector))
+		a.Sendf("%d\r", sector)
+		if attackCommand != "" {
+			a.Send(attackCommand)
+		}
+
+		// wait for the next sector to display
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector)):
+		}
+
+		sInfo, ok := a.Data.GetSector(sector)
+		if !ok {
+			return fmt.Errorf("failed to get cached info on sector %d", sector)
+		}
+		// should we drop figs and we have enough?
+		if opts.DropFigs > 0 && !sInfo.IsFedSpace && a.Data.Status.Figs-opts.DropFigs >= opts.MinFigs {
+			// does the sector need more figs?
+			if sInfo.Figs < opts.DropFigs {
+				a.Sendf("f%d\rcd", opts.DropFigs)
+			}
+		}
 	}
 
 	if block {
@@ -280,7 +340,7 @@ func (a *Actuator) GoToSD(ctx context.Context) error {
 		a.Land(hop.Planet)
 		a.Send("t\r\r1\rq")
 	}
-	a.Move(ctx, 8657, false)
+	a.MoveSafe(ctx, 8657, false)
 	return nil
 }
 

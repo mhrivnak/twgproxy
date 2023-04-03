@@ -46,6 +46,7 @@ const (
 	COMPUTERPROMPT     = "computer prompt"
 	CORPPROMPT         = "corp prompt"
 	HWEMPORIUMPROMPT   = "hardware emporium prompt"
+	MINEDSECTORPROMPT  = "mined sector prompt"
 	MOMBOTPROMPT       = "MoM bot prompt"
 	PLANETPROMPT       = "planet prompt"
 	SHIPYARDPROMPT     = "shipyard prompt"

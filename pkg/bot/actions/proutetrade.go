@@ -62,7 +62,7 @@ func (p *pRouteTrade) run(ctx context.Context) {
 		for i, sectorID := range route {
 			if i > 0 {
 				// move to the next sector
-				err = p.actuator.Move(ctx, sectorID, false)
+				err = p.actuator.MoveSafe(ctx, sectorID, false)
 				if err != nil {
 					fmt.Println(err.Error())
 					return

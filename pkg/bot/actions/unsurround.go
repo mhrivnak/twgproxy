@@ -60,10 +60,10 @@ func (s *unsurround) run(ctx context.Context) {
 	}
 
 	for _, n := range sector.Warps {
-		s.actuator.Move(ctx, n, true)
+		s.actuator.MoveSafe(ctx, n, true)
 		s.actuator.Send("f0\r")
 	}
-	s.actuator.Move(ctx, sector.ID, false)
+	s.actuator.MoveSafe(ctx, sector.ID, false)
 
 	fmt.Printf("Unsurround took %v\n", time.Since(start))
 }
