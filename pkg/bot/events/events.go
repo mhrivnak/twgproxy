@@ -7,10 +7,11 @@ import (
 )
 
 type EventKind string
-type RobResult string
+type CrimeResult string
 
 const (
 	BLINDJUMP             EventKind = "blind jump"
+	BUSTED                EventKind = "busted"
 	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
 	DENSITYDISPLAY        EventKind = "density report display"
 	DETONATORBUYMAX       EventKind = "detonator max to buy"
@@ -30,14 +31,15 @@ const (
 	ROBRESULT             EventKind = "rob result"
 	ROUTEDISPLAY          EventKind = "route display"
 	SECTORDISPLAY         EventKind = "sector display"
+	STEALRESULT           EventKind = "steal result"
 	TWARPLOCKED           EventKind = "twarp locked"
 	TWARPLOWFUEL          EventKind = "twarp not enough fuel"
 	TWXSCRIPTTERM         EventKind = "twx script terminated"
 	WARPSINTOSECTOR       EventKind = "warps into sector"
 
-	ROBSUCCESS RobResult = "rob success"
-	ROBABORT   RobResult = "rob abort"
-	ROBBUSTED  RobResult = "rob busted"
+	CRIMESUCCESS CrimeResult = "crime success"
+	CRIMEABORT   CrimeResult = "crime abort"
+	CRIMEBUSTED  CrimeResult = "crime busted"
 
 	// prompts
 	ATTACKPROMPT       = "attack prompt"
@@ -72,9 +74,18 @@ type waitSlice []Wait
 
 type waitMap map[string]waitSlice
 
+func NewBroker() *Broker {
+	return &Broker{
+		listeners: map[EventKind][]func(*Event){},
+		waits:     map[EventKind]waitMap{},
+	}
+}
+
 type Broker struct {
-	sync.Mutex
-	waits map[EventKind]waitMap
+	listenerLock sync.Mutex
+	waitLock     sync.Mutex
+	listeners    map[EventKind][]func(*Event)
+	waits        map[EventKind]waitMap
 }
 
 func (b *Broker) Publish(e *Event) {
@@ -82,21 +93,40 @@ func (b *Broker) Publish(e *Event) {
 	waits := b.getWaits(e.Kind, e.ID)
 
 	if len(waits) > 0 {
-		b.Lock()
-		defer b.Unlock()
+		b.waitLock.Lock()
+		for _, w := range waits {
+			w.c <- e
+			fmt.Printf("sent event to listener Kind: %s, ID: %s\n", w.Kind, w.ID)
+		}
+		b.waitLock.Unlock()
 	}
 
-	for _, w := range waits {
-		w.c <- e
-		fmt.Printf("sent event to listener Kind: %s, ID: %s\n", w.Kind, w.ID)
+	b.listenerLock.Lock()
+	defer b.listenerLock.Unlock()
+
+	listeners := b.listeners[e.Kind]
+	for i, _ := range listeners {
+		listeners[i](e)
 	}
+}
+
+func (b *Broker) Subscribe(kind EventKind, callBack func(*Event)) {
+	b.listenerLock.Lock()
+	defer b.listenerLock.Unlock()
+
+	listeners, ok := b.listeners[kind]
+	if !ok {
+		b.listeners[kind] = []func(*Event){callBack}
+		return
+	}
+	b.listeners[kind] = append(listeners, callBack)
 }
 
 func (b *Broker) Waits() []Wait {
 	ret := []Wait{}
 
-	b.Lock()
-	defer b.Unlock()
+	b.waitLock.Lock()
+	defer b.waitLock.Unlock()
 
 	for _, wm := range b.waits {
 		for _, w := range wm {
@@ -112,8 +142,8 @@ func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan 
 		b.waits = map[EventKind]waitMap{}
 	}
 
-	b.Lock()
-	defer b.Unlock()
+	b.waitLock.Lock()
+	defer b.waitLock.Unlock()
 
 	wm, ok := b.waits[kind]
 	if !ok {
@@ -135,8 +165,8 @@ func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan 
 
 func (b *Broker) getWaits(kind EventKind, id string) []Wait {
 	ret := waitSlice{}
-	b.Lock()
-	defer b.Unlock()
+	b.waitLock.Lock()
+	defer b.waitLock.Unlock()
 
 	wm, ok := b.waits[kind]
 	if !ok {

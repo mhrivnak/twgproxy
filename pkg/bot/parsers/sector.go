@@ -206,7 +206,8 @@ func (p *ParseSector) finalize() {
 	p.data.SectorLock.Unlock()
 
 	p.broker.Publish(&events.Event{
-		Kind: events.SECTORDISPLAY,
-		ID:   fmt.Sprint(s.ID),
+		Kind:    events.SECTORDISPLAY,
+		ID:      fmt.Sprint(s.ID),
+		DataInt: s.ID,
 	})
 }

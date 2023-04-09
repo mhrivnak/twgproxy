@@ -1,6 +1,12 @@
 package models
 
-import "sync"
+import (
+	"sync"
+
+	"gorm.io/gorm"
+
+	"github.com/mhrivnak/twgproxy/pkg/models/persist"
+)
 
 type LRSType string
 
@@ -25,6 +31,8 @@ type Data struct {
 	Status     Status
 	PlanetLock sync.Mutex
 	SectorLock sync.Mutex
+
+	Persist Persist
 }
 
 // GetSector returns a pointer to the requested Sector or nil, and a bool that
@@ -37,10 +45,14 @@ func (d *Data) GetSector(sector int) (*Sector, bool) {
 	return s, ok
 }
 
-func NewData() *Data {
+func NewData(db *gorm.DB) *Data {
 	return &Data{
 		Planets: map[int]*Planet{},
 		Sectors: map[int]*Sector{},
+		Persist: Persist{
+			SectorCache: persist.NewSectorCache(db),
+			WarpCache:   persist.NewWarpCache(db),
+		},
 	}
 }
 
@@ -55,4 +67,9 @@ type Status struct {
 	AtmDts  int
 	LRS     LRSType
 	TWarp   TWarpType
+}
+
+type Persist struct {
+	SectorCache *persist.SectorCache
+	WarpCache   *persist.WarpCache
 }

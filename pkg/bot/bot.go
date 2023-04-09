@@ -14,8 +14,10 @@ import (
 	"github.com/mhrivnak/twgproxy/pkg/bot/actions"
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
+	"github.com/mhrivnak/twgproxy/pkg/bot/listeners"
 	"github.com/mhrivnak/twgproxy/pkg/bot/parsers"
 	"github.com/mhrivnak/twgproxy/pkg/models"
+	"gorm.io/gorm"
 )
 
 type Bot struct {
@@ -23,13 +25,14 @@ type Bot struct {
 	commandWriter io.Writer
 	parsers       map[string]parsers.Parser
 	data          *models.Data
-	Actuator      actuator.Actuator
+	Actuator      *actuator.Actuator
 	Broker        *events.Broker
+	db            *gorm.DB
 }
 
-func New(game io.Reader, command io.Writer) *Bot {
-	data := models.NewData()
-	broker := &events.Broker{}
+func New(game io.Reader, command io.Writer, db *gorm.DB) *Bot {
+	data := models.NewData(db)
+	broker := events.NewBroker()
 
 	return &Bot{
 		gameReader:    game,
@@ -37,7 +40,8 @@ func New(game io.Reader, command io.Writer) *Bot {
 		parsers:       map[string]parsers.Parser{},
 		data:          data,
 		Broker:        broker,
-		Actuator:      *actuator.New(broker, data, command),
+		Actuator:      actuator.New(broker, data, command),
+		db:            db,
 	}
 }
 
@@ -72,6 +76,10 @@ func byteChan(r io.Reader) <-chan byte {
 }
 
 func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
+	// Setup listeners
+	b.Broker.Subscribe(events.BUSTED, listeners.NewBustHandler(b.Actuator))
+	b.Broker.Subscribe(events.SECTORDISPLAY, listeners.NewSectorHandler(b.Actuator))
+
 	go func() {
 		defer close(done)
 
@@ -187,18 +195,26 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 	}
 
 	switch command[0] {
+	case byte('c'):
+		if len(command) > 1 {
+			switch command[1] {
+			case byte('w'):
+				b.parsers[parsers.CIMWARPS] = parsers.NewCIMWarpsParser(b.data.Persist.WarpCache)
+				return actions.NewCIMWarpUpdate(b.Actuator)
+			}
+		}
 	case byte('a'):
 		if len(command) > 1 {
 			switch command[1] {
 			case byte('u'):
-				return actions.NewUnsurround(&b.Actuator)
+				return actions.NewUnsurround(b.Actuator)
 			case byte('s'):
 				figs, err := strconv.Atoi(string(command[2:]))
 				if err != nil {
 					fmt.Printf("failed to parse number of figs: %s", err.Error())
 					return nil
 				}
-				return actions.NewSurround(figs, &b.Actuator)
+				return actions.NewSurround(figs, b.Actuator)
 			}
 		}
 	case byte('p'):
@@ -210,12 +226,12 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 			// bulk pstrip creates and destroys planets to strip
 			if fromID == 0 {
-				return actions.NewPStripBulk(toID, &b.Actuator)
+				return actions.NewPStripBulk(toID, b.Actuator)
 			}
-			return actions.NewPStrip(fromID, toID, &b.Actuator)
+			return actions.NewPStrip(fromID, toID, b.Actuator)
 		}
 		if len(command) > 2 && command[1] == byte('r') {
-			action, err := actions.NewPRouteTrade(string(command[2:]), &b.Actuator)
+			action, err := actions.NewPRouteTrade(string(command[2:]), b.Actuator)
 			if err != nil {
 				fmt.Printf("failed to run planet route trade: %s\n", err.Error())
 				return nil
@@ -223,7 +239,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			return action
 		}
 		if len(command) > 2 && command[1] == byte('w') {
-			action, err := actions.NewPWarpSell(string(command[2:]), &b.Actuator)
+			action, err := actions.NewPWarpSell(string(command[2:]), b.Actuator)
 			if err != nil {
 				fmt.Printf("failed to run planet route trade: %s\n", err.Error())
 				return nil
@@ -236,7 +252,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				fmt.Printf("failed to parse planet create args: %s\n", err.Error())
 				return nil
 			}
-			return actions.NewPCreate(args, &b.Actuator)
+			return actions.NewPCreate(args, b.Actuator)
 		}
 		if len(command) > 3 && string(command[1:3]) == "fd" {
 			figs, err := strconv.Atoi(string(command[3:]))
@@ -244,10 +260,10 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				fmt.Printf("failed to parse fig count from args: %s\n", err.Error())
 				return nil
 			}
-			return actions.NewPFigDeploy(figs, &b.Actuator)
+			return actions.NewPFigDeploy(figs, b.Actuator)
 		}
 		if len(command) > 2 && command[1] == byte('u') {
-			upgrade, err := actions.NewPUpgrade(string(command[2:]), &b.Actuator)
+			upgrade, err := actions.NewPUpgrade(string(command[2:]), b.Actuator)
 			if err != nil {
 				fmt.Printf("failed to run mass upgrade route: %s\n", err.Error())
 				return nil
@@ -255,7 +271,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			return upgrade
 		}
 	case byte('d'):
-		return actions.NewPDrop(&b.Actuator)
+		return actions.NewPDrop(b.Actuator)
 	case byte('n'):
 		if len(command) == 2 {
 			product, err := models.ProductTypeFromChar(string(command[1]))
@@ -263,7 +279,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				fmt.Println(err.Error())
 				return nil
 			}
-			return actions.NewPTrade(0, product, &b.Actuator)
+			return actions.NewPTrade(0, product, b.Actuator)
 		}
 		if len(command) > 2 {
 			pid, err := strconv.Atoi(string(command[2:]))
@@ -276,7 +292,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				fmt.Println(err.Error())
 				return nil
 			}
-			return actions.NewPTrade(pid, product, &b.Actuator)
+			return actions.NewPTrade(pid, product, b.Actuator)
 		}
 
 	case byte('m'):
@@ -292,21 +308,21 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				EnemyFigsMax:  1000,
 				EnemyMinesMax: 50,
 			}
-			return actions.NewMove(dest, opts, &b.Actuator)
+			return actions.NewMove(dest, opts, b.Actuator)
 		}
 		dest, err := strconv.Atoi(string(command[1:]))
 		if err != nil {
 			fmt.Printf("failed to parse sector from command %s\n", string(command))
 			return nil
 		}
-		return actions.NewMove(dest, actuator.MoveOptions{}, &b.Actuator)
+		return actions.NewMove(dest, actuator.MoveOptions{}, b.Actuator)
 	case byte('e'):
 		dest, err := strconv.Atoi(string(command[1:]))
 		if err != nil {
 			fmt.Printf("failed to parse sector from command %s\n", string(command))
 			return nil
 		}
-		return actions.NewExplore(dest, &b.Actuator)
+		return actions.NewExplore(dest, b.Actuator)
 	case byte('i'):
 		if len(command) == 1 {
 			j, err := json.Marshal(b.data.Status)
@@ -355,7 +371,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 		}
 	case byte('r'):
 		if len(command) == 1 {
-			return actions.NewRob(&b.Actuator)
+			return actions.NewRob(b.Actuator)
 		}
 		if len(command) > 2 && command[1] == byte('p') {
 			// rob pair
@@ -364,7 +380,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				fmt.Printf("failed to parse other sector from arg: %s\n", err.Error())
 				return nil
 			}
-			return actions.NewRobPair(otherPort, &b.Actuator)
+			return actions.NewRobPair(otherPort, b.Actuator)
 		}
 	case byte('s'):
 		if len(command) == 1 {
@@ -462,7 +478,9 @@ func (b *Bot) ParseLine(line string) {
 	case strings.HasPrefix(clean, "<Drop/Take Fighters>"):
 		b.parsers[parsers.FIGDEPLOY] = parsers.NewFigDeployParser(b.Broker)
 	case strings.HasPrefix(clean, "You connect to their control computer to siphon the funds out"):
-		b.parsers[parsers.ROBRESULT] = parsers.NewRobResultParser(b.Broker)
+		b.parsers[parsers.ROBRESULT] = parsers.NewRobResultParser(b.Broker, b.data.Status.Sector)
+	case strings.HasPrefix(clean, "You start your droids loading the cargo"):
+		b.parsers[parsers.ROBRESULT] = parsers.NewStealResultParser(b.Broker, b.data.Status.Sector)
 	case strings.HasPrefix(clean, "Script terminated:"):
 		b.Broker.Publish(&events.Event{Kind: events.TWXSCRIPTTERM})
 	case strings.HasPrefix(clean, "*** WARNING *** No locating beam found for sector"):
@@ -477,6 +495,10 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.BUYDETONATORS] = parsers.NewParseBuyGTorp(b.Broker)
 	case strings.Contains(clean, "Planet is now in sector"):
 		b.Broker.Publish(&events.Event{Kind: events.PLANETWARPCOMPLETE})
+	case strings.Contains(clean, "Suddenly you're Busted!"):
+		b.Broker.Publish(&events.Event{Kind: events.BUSTED, DataInt: b.data.Status.Sector})
+	case strings.Contains(clean, "has warps to sector(s) :"):
+		b.parsers[parsers.SECTORWARPS] = parsers.NewSectorWarpsParser(b.data)
 	}
 
 	for k, parser := range b.parsers {

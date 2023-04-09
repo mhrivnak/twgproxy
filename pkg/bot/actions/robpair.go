@@ -31,8 +31,8 @@ func (r *robPair) run(ctx context.Context) {
 	defer close(r.done)
 	startPort := r.actuator.Data.Status.Sector
 
-	abortWait := r.actuator.Broker.WaitFor(ctx, events.ROBRESULT, string(events.ROBABORT))
-	bustedWait := r.actuator.Broker.WaitFor(ctx, events.ROBRESULT, string(events.ROBBUSTED))
+	abortWait := r.actuator.Broker.WaitFor(ctx, events.ROBRESULT, string(events.CRIMEABORT))
+	bustedWait := r.actuator.Broker.WaitFor(ctx, events.ROBRESULT, string(events.CRIMEBUSTED))
 
 	for i := 0; ; i++ {
 		r.actuator.Rob(ctx)
@@ -42,7 +42,7 @@ func (r *robPair) run(ctx context.Context) {
 			return
 		case <-bustedWait:
 			return
-		case <-r.actuator.Broker.WaitFor(ctx, events.ROBRESULT, string(events.ROBSUCCESS)):
+		case <-r.actuator.Broker.WaitFor(ctx, events.ROBRESULT, string(events.CRIMESUCCESS)):
 			if i%2 == 0 {
 				r.actuator.MoveSafe(ctx, r.otherPort, true)
 			} else {

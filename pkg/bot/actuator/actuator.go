@@ -285,7 +285,7 @@ func (a *Actuator) Rob(ctx context.Context) {
 			a.Send("0\r")
 			a.Broker.Publish(&events.Event{
 				Kind: events.ROBRESULT,
-				ID:   string(events.ROBABORT),
+				ID:   string(events.CRIMEABORT),
 			})
 			return
 		}
@@ -306,6 +306,10 @@ func (a *Actuator) Express(destination int) {
 	} else {
 		a.Send(fmt.Sprintf("%d\rne", destination))
 	}
+}
+
+func (a *Actuator) CIMSectorUpdate(ctx context.Context) {
+	a.Send("^iq")
 }
 
 // BuyGTorpsAndDetonators buys the max gtorps and detonators. Must be run from

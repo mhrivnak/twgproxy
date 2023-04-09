@@ -5,6 +5,7 @@ import "strings"
 const (
 	BUYDETONATORS = "buy detonators"
 	BUYGTORPS     = "buy gtorps"
+	CIMWARPS      = "cim warps"
 	CORPPLANETS   = "corp planet display"
 	DENSITYSCAN   = "density scan"
 	FIGDEPLOY     = "fig deploy"
@@ -17,6 +18,7 @@ const (
 	QUICKSTATS    = "quick stats"
 	ROUTEINFO     = "route info"
 	SECTORINFO    = "sector info"
+	SECTORWARPS   = "sector warps"
 )
 
 type Parser interface {
