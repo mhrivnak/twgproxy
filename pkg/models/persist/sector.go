@@ -77,7 +77,7 @@ func (c *SectorCache) UpdateIfNeeded(sector *Sector) {
 
 	if !ok || found.IsObsolete(sector) {
 		// preserve bust records
-		if found.Busted != nil {
+		if found != nil && found.Busted != nil {
 			sector.Busted = found.Busted
 		}
 
