@@ -6,18 +6,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
 )
 
-func NewSectorWarpsParser(data *models.Data) Parser {
+func NewSectorWarpsParser(broker *events.Broker, data *models.Data) Parser {
 	return &ParseSectorWarps{
-		data: data,
+		data:   data,
+		broker: broker,
 	}
 }
 
 type ParseSectorWarps struct {
-	done bool
-	data *models.Data
+	done   bool
+	broker *events.Broker
+	data   *models.Data
 }
 
 var warpQueryInfo *regexp.Regexp = regexp.MustCompile(`Sector ([0-9]+) has warps to sector\(s\) :  ([0-9 -]+)`)
@@ -59,6 +62,11 @@ func (p *ParseSectorWarps) Parse(line string) error {
 	if ok {
 		s.Warps = to
 	}
+
+	p.broker.Publish(&events.Event{
+		Kind:    events.SECTORWARPSDISPLAY,
+		DataInt: from,
+	})
 
 	return nil
 }

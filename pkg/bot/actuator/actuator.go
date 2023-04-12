@@ -312,6 +312,18 @@ func (a *Actuator) CIMSectorUpdate(ctx context.Context) {
 	a.Send("^iq")
 }
 
+func (a *Actuator) QueryWarps(ctx context.Context, sectorID int, block bool) {
+	a.Sendf("ci%d\rq", sectorID)
+
+	if block {
+		select {
+		case <-ctx.Done():
+			return
+		case <-a.Broker.WaitFor(ctx, events.SECTORWARPSDISPLAY, ""):
+		}
+	}
+}
+
 // BuyGTorpsAndDetonators buys the max gtorps and detonators. Must be run from
 // stardock sector. As an implementation detail, it declines to buy each item
 // once so the event parser can observe the max that's possible to buy.

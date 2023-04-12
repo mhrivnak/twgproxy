@@ -108,6 +108,7 @@ func (p *parsePortReport) finalize() {
 		fmt.Printf("added port report for sector %d\n", sectorID)
 		p.broker.Publish(&events.Event{
 			Kind:    events.PORTREPORTDISPLAY,
+			ID:      fmt.Sprint(sectorID),
 			DataInt: sectorID,
 		})
 	}

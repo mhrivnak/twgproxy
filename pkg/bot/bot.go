@@ -51,6 +51,8 @@ var ansiPattern *regexp.Regexp = regexp.MustCompile("\x1b\\[.*?m")
 var warping *regexp.Regexp = regexp.MustCompile(`Warping to Sector (\d+)`)
 var promptSector *regexp.Regexp = regexp.MustCompile(`\[([0-9]+)\] `)
 var fighit *regexp.Regexp = regexp.MustCompile(`Deployed Fighters Report Sector (\d+)`)
+var promptBuySell *regexp.Regexp = regexp.MustCompile(`How many holds of ([ a-zA-Z]+) do you want to ([a-z]+) \[`)
+var tradeComplete *regexp.Regexp = regexp.MustCompile(`You have [0-9,]+ credits and ([0-9]+) empty cargo holds.`)
 
 func byteChan(r io.Reader) <-chan byte {
 	c := make(chan byte)
@@ -195,6 +197,10 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 	}
 
 	switch command[0] {
+	case byte('w'):
+		if string(command[:4]) == "wppt" {
+			return actions.NewWPPT(b.Actuator)
+		}
 	case byte('c'):
 		if len(command) > 1 {
 			switch command[1] {
@@ -495,10 +501,25 @@ func (b *Bot) ParseLine(line string) {
 		b.parsers[parsers.BUYDETONATORS] = parsers.NewParseBuyGTorp(b.Broker)
 	case strings.Contains(clean, "Planet is now in sector"):
 		b.Broker.Publish(&events.Event{Kind: events.PLANETWARPCOMPLETE})
-	case strings.Contains(clean, "Suddenly you're Busted!"):
+	case strings.HasPrefix(clean, "The port Guards surround you"):
 		b.Broker.Publish(&events.Event{Kind: events.BUSTED, DataInt: b.data.Status.Sector})
 	case strings.Contains(clean, "has warps to sector(s) :"):
-		b.parsers[parsers.SECTORWARPS] = parsers.NewSectorWarpsParser(b.data)
+		b.parsers[parsers.SECTORWARPS] = parsers.NewSectorWarpsParser(b.Broker, b.data)
+	case strings.Contains(clean, "empty cargo holds."):
+		parts := tradeComplete.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			empty, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Printf("failed to parse empty holds: %s\n", err.Error())
+				return
+			}
+			b.Broker.Publish(&events.Event{
+				Kind:    events.TRADECOMPLETE,
+				DataInt: empty,
+			})
+		}
+	case strings.Contains(clean, "We're not interested."):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	}
 
 	for k, parser := range b.parsers {
@@ -552,6 +573,33 @@ func (b *Bot) checkForPrompt(line string) {
 		e.ID = events.STOPINSECTORPROMPT
 	case "Mined Sector":
 		e.ID = events.MINEDSECTORPROMPT
+	case "How many hol":
+		parts := promptBuySell.FindStringSubmatch(clean)
+		if len(parts) != 3 {
+			break
+		}
+		switch parts[2] {
+		case "buy":
+			e.ID = events.BUYPROMPT
+		case "sell":
+			e.ID = events.SELLPROMPT
+		default:
+			fmt.Printf("unknown buy/sell prompt word: %s\n", parts[2])
+			return
+		}
+
+		switch parts[1] {
+		case "Fuel Ore":
+			e.Data = string(models.FUEL)
+		case "Organics":
+			e.Data = string(models.ORG)
+		case "Equipment":
+			e.Data = string(models.EQU)
+		default:
+			fmt.Printf("unknown buy/sell prompt product: %s\n", parts[1])
+			return
+		}
+
 	}
 	if e.ID != "" {
 		b.Broker.Publish(&e)

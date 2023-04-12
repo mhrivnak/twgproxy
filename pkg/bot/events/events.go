@@ -24,6 +24,7 @@ const (
 	PLANETDISPLAY         EventKind = "planet display"
 	PLANETLANDINGDISPLAY  EventKind = "planet landing display"
 	PLANETWARPCOMPLETE    EventKind = "planet warp complete"
+	PORTNOTINTERESTED     EventKind = "port not interested"
 	PORTREPORTDISPLAY     EventKind = "port report"
 	PORTROBCREDS          EventKind = "port rob creds"
 	PROMPTDISPLAY         EventKind = "prompt display"
@@ -31,7 +32,9 @@ const (
 	ROBRESULT             EventKind = "rob result"
 	ROUTEDISPLAY          EventKind = "route display"
 	SECTORDISPLAY         EventKind = "sector display"
+	SECTORWARPSDISPLAY    EventKind = "sector warps display"
 	STEALRESULT           EventKind = "steal result"
+	TRADECOMPLETE         EventKind = "trade complete"
 	TWARPLOCKED           EventKind = "twarp locked"
 	TWARPLOWFUEL          EventKind = "twarp not enough fuel"
 	TWXSCRIPTTERM         EventKind = "twx script terminated"
@@ -43,6 +46,7 @@ const (
 
 	// prompts
 	ATTACKPROMPT       = "attack prompt"
+	BUYPROMPT          = "buy prompt"
 	CITADELPROMPT      = "citadel prompt"
 	COMMANDPROMPT      = "command prompt"
 	COMPUTERPROMPT     = "computer prompt"
@@ -51,6 +55,7 @@ const (
 	MINEDSECTORPROMPT  = "mined sector prompt"
 	MOMBOTPROMPT       = "MoM bot prompt"
 	PLANETPROMPT       = "planet prompt"
+	SELLPROMPT         = "sell prompt"
 	SHIPYARDPROMPT     = "shipyard prompt"
 	STARDOCKPROMPT     = "stardock prompt"
 	STOPINSECTORPROMPT = "stop in this sector prompt"
