@@ -387,7 +387,7 @@ func (p *wppt) run(ctx context.Context) {
 			// bias toward sectors not visited during this action
 			next = unvisited[rand.Intn(len(unvisited))]
 		default:
-			next = current.Warps[rand.Intn(len(safeHops))]
+			next = safeHops[rand.Intn(len(safeHops))]
 		}
 
 		p.actuator.Move(ctx, next, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
