@@ -121,6 +121,20 @@ func (a *Actuator) MassUpgrade(ctx context.Context, block bool) error {
 	return nil
 }
 
+func (a *Actuator) RouteFromTo(ctx context.Context, from, to int) ([]int, error) {
+	// send commands
+	a.Send(fmt.Sprintf("cf%d\r%d\rq", from, to))
+
+	// wait for events
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case e := <-a.Broker.WaitFor(ctx, events.ROUTEDISPLAY, ""):
+		fmt.Printf("got route: %s\n", e.Data)
+		return parseSectors(e.Data)
+	}
+}
+
 func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
 	current, ok := a.Data.GetSector(a.Data.Status.Sector)
 	if !ok {
@@ -133,17 +147,7 @@ func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
 		}
 	}
 
-	// send commands
-	a.Send(fmt.Sprintf("cf\r%d\rq", sector))
-
-	// wait for events
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case e := <-a.Broker.WaitFor(ctx, events.ROUTEDISPLAY, ""):
-		fmt.Printf("got route: %s\n", e.Data)
-		return parseSectors(e.Data)
-	}
+	return a.RouteFromTo(ctx, current.ID, sector)
 }
 
 type MoveOptions struct {
@@ -160,6 +164,11 @@ func (a *Actuator) MoveSafe(ctx context.Context, dest int, block bool) error {
 func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block bool) error {
 	// make sure we know what kind of long range scanner is available
 	a.QuickStats(ctx)
+
+	if a.Data.Status.Sector == dest {
+		fmt.Printf("already in sector %d; no move needed\n", dest)
+		return nil
+	}
 
 	fmt.Printf("MOVE to %d\n", dest)
 	sectors, err := a.RouteTo(ctx, dest)
@@ -320,6 +329,7 @@ func (a *Actuator) QueryWarps(ctx context.Context, sectorID int, block bool) {
 		case <-ctx.Done():
 			return
 		case <-a.Broker.WaitFor(ctx, events.SECTORWARPSDISPLAY, ""):
+		case <-a.Broker.WaitFor(ctx, events.NOTVISITEDSECTORMSG, ""):
 		}
 	}
 }

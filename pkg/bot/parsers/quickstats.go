@@ -82,12 +82,36 @@ func (p *ParseQuickStats) finalize() {
 				fmt.Println("error parsing shields")
 			}
 			p.data.Status.Shields = shields
+		case "Ship":
+			ship, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println("error parsing ship")
+			}
+			p.data.Status.Ship = ship
 		case "Hlds":
 			holds, err := strconv.Atoi(removeCommas(parts[2]))
 			if err != nil {
 				fmt.Println("error parsing holds")
 			}
 			p.data.Status.Holds = holds
+		case "Fuel":
+			fuel, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println("error parsing fuel")
+			}
+			p.data.Status.Fuel = fuel
+		case "Org":
+			org, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println("error parsing org")
+			}
+			p.data.Status.Org = org
+		case "Equ":
+			equ, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println("error parsing equ")
+			}
+			p.data.Status.Equ = equ
 		case "Exp":
 			exp, err := strconv.Atoi(removeCommas(parts[2]))
 			if err != nil {

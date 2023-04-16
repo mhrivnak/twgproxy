@@ -27,10 +27,12 @@ const (
 type Data struct {
 	Planets    map[int]*Planet
 	Sectors    map[int]*Sector
+	Ships      map[int]*Ship
 	Settings   Settings
 	Status     Status
 	PlanetLock sync.Mutex
 	SectorLock sync.Mutex
+	ShipLock   sync.Mutex
 
 	Persist Persist
 }
@@ -45,10 +47,26 @@ func (d *Data) GetSector(sector int) (*Sector, bool) {
 	return s, ok
 }
 
+func (d *Data) GetShip(id int) (*Ship, bool) {
+	d.ShipLock.Lock()
+	defer d.ShipLock.Unlock()
+
+	s, ok := d.Ships[id]
+	return s, ok
+}
+
+func (d *Data) PutShip(s *Ship) {
+	d.ShipLock.Lock()
+	defer d.ShipLock.Unlock()
+
+	d.Ships[s.ID] = s
+}
+
 func NewData(db *gorm.DB) *Data {
 	return &Data{
 		Planets: map[int]*Planet{},
 		Sectors: map[int]*Sector{},
+		Ships:   map[int]*Ship{},
 		Persist: Persist{
 			SectorCache: persist.NewSectorCache(db),
 			WarpCache:   persist.NewWarpCache(db),
@@ -61,7 +79,11 @@ type Status struct {
 	Exp     int
 	Figs    int
 	Holds   int
+	Fuel    int
+	Org     int
+	Equ     int
 	Sector  int
+	Ship    int
 	Shields int
 	GTorps  int
 	AtmDts  int

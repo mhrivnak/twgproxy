@@ -223,7 +223,6 @@ func (p *wppt) run(ctx context.Context) {
 
 		if current.Port != nil {
 			fmt.Println("considering port")
-			// TODO: don't do this if the sector has enemy figs
 			p.actuator.Send("cr\rq")
 
 			select {

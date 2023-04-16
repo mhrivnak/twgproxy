@@ -10,6 +10,7 @@ type EventKind string
 type CrimeResult string
 
 const (
+	AVAILABLESHIPS        EventKind = "available ships"
 	BLINDJUMP             EventKind = "blind jump"
 	BUSTED                EventKind = "busted"
 	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
@@ -18,12 +19,15 @@ const (
 	FIGDEPLOY             EventKind = "fig deploy display"
 	FIGHIT                EventKind = "fig hit"
 	GTORPBUYMAX           EventKind = "gtorp max to buy"
+	HOLDSTOBUY            EventKind = "holds to buy"
 	MBOTNOTHINGTOSELL     EventKind = "MoM bot nothing to sell"
 	MBOTTRADEDONE         EventKind = "MoM bot trade done"
+	NOTVISITEDSECTORMSG   EventKind = "you have never visited sector"
 	PLANETCREATE          EventKind = "planet create"
 	PLANETDISPLAY         EventKind = "planet display"
 	PLANETLANDINGDISPLAY  EventKind = "planet landing display"
 	PLANETWARPCOMPLETE    EventKind = "planet warp complete"
+	PORTEQUTOSTEAL        EventKind = "port equ to steal"
 	PORTNOTINTERESTED     EventKind = "port not interested"
 	PORTREPORTDISPLAY     EventKind = "port report"
 	PORTROBCREDS          EventKind = "port rob creds"
@@ -33,6 +37,7 @@ const (
 	ROUTEDISPLAY          EventKind = "route display"
 	SECTORDISPLAY         EventKind = "sector display"
 	SECTORWARPSDISPLAY    EventKind = "sector warps display"
+	SHIPNOTAVAILABLE      EventKind = "ship not available for xport"
 	STEALRESULT           EventKind = "steal result"
 	TRADECOMPLETE         EventKind = "trade complete"
 	TWARPLOCKED           EventKind = "twarp locked"

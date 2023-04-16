@@ -53,6 +53,7 @@ var promptSector *regexp.Regexp = regexp.MustCompile(`\[([0-9]+)\] `)
 var fighit *regexp.Regexp = regexp.MustCompile(`Deployed Fighters Report Sector (\d+)`)
 var promptBuySell *regexp.Regexp = regexp.MustCompile(`How many holds of ([ a-zA-Z]+) do you want to ([a-z]+) \[`)
 var tradeComplete *regexp.Regexp = regexp.MustCompile(`You have [0-9,]+ credits and ([0-9]+) empty cargo holds.`)
+var holdsToBuy *regexp.Regexp = regexp.MustCompile(`^A  Cargo holds +: +[0-9]+ credits / next hold +([0-9]+)`)
 
 func byteChan(r io.Reader) <-chan byte {
 	c := make(chan byte)
@@ -200,6 +201,14 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 	case byte('w'):
 		if string(command[:4]) == "wppt" {
 			return actions.NewWPPT(b.Actuator)
+		}
+		if string(command[:4]) == "wsst" {
+			shipID, err := strconv.Atoi(string(command[4:]))
+			if err != nil {
+				fmt.Printf("error parsing wsst ship: %s", err.Error())
+				return nil
+			}
+			return actions.NewWSST(b.Actuator, shipID)
 		}
 	case byte('c'):
 		if len(command) > 1 {
@@ -520,6 +529,31 @@ func (b *Bot) ParseLine(line string) {
 		}
 	case strings.Contains(clean, "We're not interested."):
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "When you want to make me a real offer, drop back by."):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "Available Ship Scan"):
+		b.parsers[parsers.AVAILABLESHIPS] = parsers.NewParseAvailableShipScan(b.Broker, b.data)
+	case strings.HasPrefix(clean, "You have never visited sector"):
+		b.Broker.Publish(&events.Event{Kind: events.NOTVISITEDSECTORMSG})
+	case strings.HasPrefix(clean, " Items     Status  Trading On Dock OnBoard"):
+		b.parsers[parsers.PORTEQUTOSTEAL] = parsers.NewParseSteal(b.Broker)
+	case strings.HasPrefix(clean, "For stealing from this port, your alignment went down"):
+		b.Broker.Publish(&events.Event{Kind: events.STEALRESULT, ID: string(events.CRIMESUCCESS)})
+	case strings.HasPrefix(clean, "A  Cargo holds     :"):
+		parts := holdsToBuy.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			holds, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return
+			}
+			b.Broker.Publish(&events.Event{
+				Kind:    events.HOLDSTOBUY,
+				DataInt: holds,
+			})
+		}
+	case strings.HasPrefix(clean, "That is not an available ship."):
+		b.Broker.Publish(&events.Event{Kind: events.SHIPNOTAVAILABLE})
+
 	}
 
 	for k, parser := range b.parsers {
