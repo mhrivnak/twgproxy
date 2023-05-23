@@ -25,16 +25,26 @@ const (
 )
 
 type Data struct {
-	Planets    map[int]*Planet
-	Sectors    map[int]*Sector
-	Ships      map[int]*Ship
-	Settings   Settings
-	Status     Status
-	PlanetLock sync.Mutex
-	SectorLock sync.Mutex
-	ShipLock   sync.Mutex
+	Planets        map[int]*Planet
+	Sectors        map[int]*Sector
+	Ships          map[int]*Ship
+	PortReports    map[int]*PortReport
+	Settings       Settings
+	Status         Status
+	PlanetLock     sync.Mutex
+	SectorLock     sync.Mutex
+	ShipLock       sync.Mutex
+	PortReportLock sync.Mutex
 
 	Persist Persist
+}
+
+func (d *Data) GetPortReport(sector int) (*PortReport, bool) {
+	d.PortReportLock.Lock()
+	defer d.PortReportLock.Unlock()
+
+	s, ok := d.PortReports[sector]
+	return s, ok
 }
 
 // GetSector returns a pointer to the requested Sector or nil, and a bool that
@@ -64,9 +74,10 @@ func (d *Data) PutShip(s *Ship) {
 
 func NewData(db *gorm.DB) *Data {
 	return &Data{
-		Planets: map[int]*Planet{},
-		Sectors: map[int]*Sector{},
-		Ships:   map[int]*Ship{},
+		Planets:     map[int]*Planet{},
+		Sectors:     map[int]*Sector{},
+		Ships:       map[int]*Ship{},
+		PortReports: map[int]*PortReport{},
 		Persist: Persist{
 			SectorCache: persist.NewSectorCache(db),
 			WarpCache:   persist.NewWarpCache(db),

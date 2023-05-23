@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
@@ -93,25 +94,27 @@ func (p *parsePortReport) finalize() {
 	}
 
 	report := models.PortReport{
+		Time: time.Now(),
 		Fuel: fuel,
 		Org:  org,
 		Equ:  equ,
 	}
 
 	sector, ok := p.data.GetSector(sectorID)
-	if !ok {
-		fmt.Printf("sector %d not in cache\n", sectorID)
-		return
-	}
-	if sector.Port != nil {
+	if ok && sector.Port != nil {
 		sector.Port.Report = &report
 		fmt.Printf("added port report for sector %d\n", sectorID)
-		p.broker.Publish(&events.Event{
-			Kind:    events.PORTREPORTDISPLAY,
-			ID:      fmt.Sprint(sectorID),
-			DataInt: sectorID,
-		})
 	}
+
+	p.data.PortReportLock.Lock()
+	p.data.PortReports[sectorID] = &report
+	p.data.PortReportLock.Unlock()
+
+	p.broker.Publish(&events.Event{
+		Kind:    events.PORTREPORTDISPLAY,
+		ID:      fmt.Sprint(sectorID),
+		DataInt: sectorID,
+	})
 }
 
 func parsePortReportLine(line string, r *regexp.Regexp) (models.PortItem, error) {

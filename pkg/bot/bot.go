@@ -54,6 +54,8 @@ var fighit *regexp.Regexp = regexp.MustCompile(`Deployed Fighters Report Sector 
 var promptBuySell *regexp.Regexp = regexp.MustCompile(`How many holds of ([ a-zA-Z]+) do you want to ([a-z]+) \[`)
 var tradeComplete *regexp.Regexp = regexp.MustCompile(`You have [0-9,]+ credits and ([0-9]+) empty cargo holds.`)
 var holdsToBuy *regexp.Regexp = regexp.MustCompile(`^A  Cargo holds +: +[0-9]+ credits / next hold +([0-9]+)`)
+var figsToBuy *regexp.Regexp = regexp.MustCompile(`^B  Fighters +: +[0-9]+ credits per fighter +([0-9]+)`)
+var shieldsToBuy *regexp.Regexp = regexp.MustCompile(`^C  Shield Points +: +[0-9]+ credits per point +([0-9]+)`)
 
 func byteChan(r io.Reader) <-chan byte {
 	c := make(chan byte)
@@ -531,6 +533,18 @@ func (b *Bot) ParseLine(line string) {
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	case strings.Contains(clean, "When you want to make me a real offer, drop back by."):
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "Swine, go peddle your wares somewhere else, you make me sick."):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "I see you are as stupid as you look, get lost..."):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "HA!  You think me a fool?  Thats insane!  Get out of here!"):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "Get lost creep, that junk isn't worth half that much!"):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "I think you'd better leave if you value your life!"):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "How have you survived this long?  Get lost, I'm not interested."):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	case strings.Contains(clean, "Available Ship Scan"):
 		b.parsers[parsers.AVAILABLESHIPS] = parsers.NewParseAvailableShipScan(b.Broker, b.data)
 	case strings.HasPrefix(clean, "You have never visited sector"):
@@ -551,8 +565,34 @@ func (b *Bot) ParseLine(line string) {
 				DataInt: holds,
 			})
 		}
+	case strings.HasPrefix(clean, "B  Fighters        :"):
+		parts := figsToBuy.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			figs, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return
+			}
+			b.Broker.Publish(&events.Event{
+				Kind:    events.FIGSTOBUY,
+				DataInt: figs,
+			})
+		}
+	case strings.HasPrefix(clean, "C  Shield Points   :"):
+		parts := shieldsToBuy.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			shields, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return
+			}
+			b.Broker.Publish(&events.Event{
+				Kind:    events.SHIELDSTOBUY,
+				DataInt: shields,
+			})
+		}
 	case strings.HasPrefix(clean, "That is not an available ship."):
 		b.Broker.Publish(&events.Event{Kind: events.SHIPNOTAVAILABLE})
+	case strings.HasPrefix(clean, "I have no information about a port in that sector."):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOINFO})
 
 	}
 

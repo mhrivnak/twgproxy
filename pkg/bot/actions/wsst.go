@@ -35,34 +35,22 @@ func (w *wsst) Start(ctx context.Context) <-chan struct{} {
 	return w.done
 }
 
-// TODO enable this to work without a *models.Sector, but just a port report.
-// Then get rid of getSectorWithVisit.
-func (w *wsst) portCanBeUsed(ctx context.Context, sector *models.Sector) bool {
+func (w *wsst) portCanBeUsed(ctx context.Context, sector *persist.Sector) bool {
 	// is this an xxB port?
-	if sector.Port != nil && len(sector.Port.Type) == 3 && sector.Port.Type[2] == byte('B') {
+	if sector.Equ == string(models.BUYING) {
 		fmt.Printf("considering port %d\n", sector.ID)
-		w.actuator.Sendf("cr%d\rq", sector.ID)
 
-		savedSector, ok := w.actuator.Data.Persist.SectorCache.Get(sector.ID)
-
-		select {
-		case <-ctx.Done():
-			return false
-		case <-w.actuator.Broker.WaitFor(ctx, events.PORTREPORTDISPLAY, ""):
-		}
-
-		sector, ok = w.actuator.Data.GetSector(sector.ID)
-		if !ok {
-			// port disappeared?
+		// any report within the last 2 minutes is recent enough
+		report, err := w.actuator.GetPortReport(ctx, int(sector.ID), time.Minute*2)
+		if err != nil {
+			fmt.Println(err.Error())
 			return false
 		}
 
-		if sector.Port == nil || sector.Port.Report == nil {
-			// unexpected nil value
+		// typically because enemy figs are in the sector
+		if report == nil {
 			return false
 		}
-
-		report := sector.Port.Report
 
 		switch {
 		case report.Equ.Status != models.BUYING:
@@ -73,9 +61,7 @@ func (w *wsst) portCanBeUsed(ctx context.Context, sector *models.Sector) bool {
 			return false
 		case report.Org.Trading > 10000:
 			return false
-		case savedSector.Busted != nil:
-			return false
-		case sector.IsFedSpace:
+		case sector.Busted != nil:
 			return false
 		}
 		return true
@@ -95,6 +81,14 @@ func (w *wsst) updateOtherShipSector(ctx context.Context) {
 	}
 }
 
+func (w *wsst) genMoveOptions() actuator.MoveOptions {
+	return actuator.MoveOptions{
+		DropFigs:     1,
+		EnemyFigsMax: (w.actuator.Data.Status.Figs + w.actuator.Data.Status.Shields) / 3,
+		MinFigs:      100,
+	}
+}
+
 func (w *wsst) run(ctx context.Context) {
 	defer close(w.done)
 
@@ -110,7 +104,7 @@ func (w *wsst) run(ctx context.Context) {
 	w.updateOtherShipSector(ctx)
 
 	if w.shipCurrent.sector != w.shipOther.sector {
-		err := w.actuator.Move(ctx, w.shipOther.sector, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
+		err := w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions(), false)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
@@ -151,23 +145,47 @@ func (w *wsst) run(ctx context.Context) {
 		}
 
 		if busted {
-			err = w.actuator.MoveSafe(ctx, 1, false)
+			err = w.actuator.Move(ctx, 1, w.genMoveOptions(), false)
 			if err != nil {
 				fmt.Printf("stopping WSST: %s\n", err.Error())
 				return
 			}
 
-			// TODO also buy shields and figs
 			w.actuator.Sendf("pta")
 
+			holdsChan := w.actuator.Broker.WaitFor(ctx, events.HOLDSTOBUY, "")
+			figsChan := w.actuator.Broker.WaitFor(ctx, events.FIGSTOBUY, "")
+			shieldsChan := w.actuator.Broker.WaitFor(ctx, events.SHIELDSTOBUY, "")
+
+			// buy holds
 			select {
 			case <-ctx.Done():
 				return
-			case e := <-w.actuator.Broker.WaitFor(ctx, events.HOLDSTOBUY, ""):
-				w.actuator.Sendf("%d\ryq", e.DataInt)
+			case e := <-holdsChan:
+				w.actuator.Sendf("%d\ry", e.DataInt)
 			}
 
-			w.actuator.Send("x\rq")
+			// buy figs
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-figsChan:
+				if e.DataInt > 0 {
+					w.actuator.Sendf("b%d\r", e.DataInt)
+				}
+			}
+
+			// buy shields
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-shieldsChan:
+				if e.DataInt > 0 {
+					w.actuator.Sendf("c%d\r", e.DataInt)
+				}
+			}
+
+			w.actuator.Send("qx\rq")
 			// wait for the parser
 			select {
 			case <-ctx.Done():
@@ -176,7 +194,7 @@ func (w *wsst) run(ctx context.Context) {
 				w.shipOther.sector = e.DataInt
 			}
 
-			err = w.actuator.MoveSafe(ctx, w.shipOther.sector, false)
+			err = w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions(), false)
 			if err != nil {
 				fmt.Printf("stopping WSST: %s\n", err.Error())
 				return
@@ -362,13 +380,13 @@ func (w *wsst) steal(ctx context.Context) (bool, error) {
 	}
 }
 
-func (w *wsst) getSectorWithVisit(ctx context.Context, sectorID int) (*models.Sector, error) {
-	sector, ok := w.actuator.Data.GetSector(sectorID)
+func (w *wsst) getSectorWithVisit(ctx context.Context, sectorID int) (*persist.Sector, error) {
+	sector, ok := w.actuator.Data.Persist.SectorCache.Get(sectorID)
 	if ok {
 		return sector, nil
 	}
 	// visit the sector, holo-scan
-	err := w.actuator.Move(ctx, sectorID, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
+	err := w.actuator.Move(ctx, sectorID, w.genMoveOptions(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +398,7 @@ func (w *wsst) getSectorWithVisit(ctx context.Context, sectorID int) (*models.Se
 	case <-w.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sectorID)):
 	}
 
-	sector, ok = w.actuator.Data.GetSector(sectorID)
+	sector, ok = w.actuator.Data.Persist.SectorCache.Get(sectorID)
 	if !ok {
 		return nil, fmt.Errorf("failed to get sector details even after visiting it")
 	}
@@ -427,8 +445,12 @@ func (w *wsst) findPorts(ctx context.Context) error {
 
 OUTER:
 	for {
-		start := w.shipCurrent.sector
+		fmt.Println("####################### START FIND PORTS ITERATION ##########################")
+		start := w.actuator.Data.Status.Sector
 		visited[start] = struct{}{}
+
+		// holo-scan
+		w.actuator.Send("sh")
 
 		candidates, unexplored := w.findXXBs(ctx, start, 5, []int{})
 
@@ -440,7 +462,7 @@ OUTER:
 			if w.portCanBeUsed(ctx, sector) {
 				fmt.Printf("found suitable portA: %d\n", sector.ID)
 				// look for a companion
-				companions, cUnexplored := w.findXXBs(ctx, candidate, 5, []int{sector.ID})
+				companions, cUnexplored := w.findXXBs(ctx, candidate, 5, []int{int(sector.ID)})
 				fmt.Printf("%d potential companions\n", len(companions))
 				for _, companion := range companions {
 					fmt.Printf("considering companion %d\n", companion)
@@ -457,11 +479,11 @@ OUTER:
 				// explore
 				for _, uc := range cUnexplored {
 					fmt.Printf("moving to unexplored sector %d\n", uc)
-					err = w.actuator.Move(ctx, uc, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
+					err = w.actuator.Move(ctx, uc, w.genMoveOptions(), false)
 					if err != nil {
 						return err
 					}
-					cSector, ok := w.actuator.Data.GetSector(uc)
+					cSector, ok := w.actuator.Data.Persist.SectorCache.Get(uc)
 					if !ok {
 						fmt.Println("cound not get current sector from cache")
 						continue
@@ -486,7 +508,7 @@ OUTER:
 					return err
 				}
 				if len(returnRoute) <= 6 {
-					err = w.actuator.Move(ctx, u, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
+					err = w.actuator.Move(ctx, u, w.genMoveOptions(), false)
 					if err != nil {
 						return err
 					}
@@ -494,7 +516,7 @@ OUTER:
 					if err != nil {
 						return err
 					}
-					err = w.actuator.Move(ctx, u, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
+					err = w.actuator.Move(ctx, u, w.genMoveOptions(), false)
 					if err != nil {
 						return err
 					}
@@ -506,16 +528,17 @@ OUTER:
 		// in case we went exploring to get sector info
 		fmt.Println("moving back to the other ship to start towing it")
 		w.updateOtherShipSector(ctx)
-		err := w.actuator.MoveSafe(ctx, w.shipOther.sector, false)
+		err := w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions(), false)
 		if err != nil {
 			return err
 		}
 
-		current, _ := w.actuator.Data.GetSector(w.shipCurrent.sector)
+		current, _ := w.actuator.Data.GetSector(w.actuator.Data.Status.Sector)
 		safeHops := []int{}
 		for _, warp := range current.Warps {
 			s, ok := w.actuator.Data.GetSector(warp)
 			if !ok {
+				fmt.Printf("cache miss getting sector %d for safe hops\n", warp)
 				continue
 			}
 			if s.IsSafe() {
@@ -543,16 +566,19 @@ OUTER:
 		switch {
 		case len(unexplored) > 0:
 			// bias toward unexplored sectors
+			fmt.Println("picking a random unexplored sector")
 			next = unexplored[rand.Intn(len(unexplored))]
 		case len(unvisited) > 0:
 			// bias toward sectors not visited during this action
+			fmt.Println("picking a random unvisited sector")
 			next = unvisited[rand.Intn(len(unvisited))]
 		default:
 			next = safeHops[rand.Intn(len(safeHops))]
+			fmt.Println("picking a random sector")
 		}
 
 		w.actuator.Sendf("wn%d\r", w.shipOther.ID)
-		err = w.actuator.MoveSafe(ctx, next, false)
+		err = w.actuator.Move(ctx, next, w.genMoveOptions(), false)
 		if err != nil {
 			return err
 		}
@@ -561,7 +587,7 @@ OUTER:
 }
 
 func (w *wsst) moveShipsIntoPosition(ctx context.Context, a, b int) error {
-	err := w.actuator.Move(ctx, a, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
+	err := w.actuator.Move(ctx, a, w.genMoveOptions(), false)
 	if err != nil {
 		return err
 	}
@@ -570,7 +596,7 @@ func (w *wsst) moveShipsIntoPosition(ctx context.Context, a, b int) error {
 	if err != nil {
 		return err
 	}
-	err = w.actuator.Move(ctx, b, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
+	err = w.actuator.Move(ctx, b, w.genMoveOptions(), false)
 	if err != nil {
 		return err
 	}

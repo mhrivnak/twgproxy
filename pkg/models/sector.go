@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Sector struct {
@@ -47,6 +48,7 @@ type Port struct {
 }
 
 type PortReport struct {
+	Time time.Time
 	Fuel PortItem
 	Org  PortItem
 	Equ  PortItem

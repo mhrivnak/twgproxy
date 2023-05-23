@@ -76,7 +76,7 @@ func (a *Actuator) RouteWalk(ctx context.Context, points []int, task func()) {
 		for i, sectorID := range route {
 			if i > 0 {
 				// move to the next sector
-				err = a.MoveSafe(ctx, sectorID, true)
+				err = a.MoveSafe(ctx, sectorID, false)
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -155,6 +155,7 @@ type MoveOptions struct {
 	EnemyFigsMax  int
 	EnemyMinesMax int
 	MinFigs       int
+	SectorFunc    func(context.Context, int) error
 }
 
 func (a *Actuator) MoveSafe(ctx context.Context, dest int, block bool) error {
@@ -240,6 +241,13 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 			// does the sector need more figs?
 			if sInfo.Figs < opts.DropFigs {
 				a.Sendf("f%d\rcd", opts.DropFigs)
+			}
+		}
+
+		if opts.SectorFunc != nil {
+			err = opts.SectorFunc(ctx, sector)
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -368,6 +376,33 @@ func (a *Actuator) GoToSD(ctx context.Context) error {
 	}
 	a.MoveSafe(ctx, 8657, false)
 	return nil
+}
+
+// GetPortReport returns nil, nil if a port report is not available for the sector.
+func (a *Actuator) GetPortReport(ctx context.Context, sector int, maxAge time.Duration) (*models.PortReport, error) {
+	if maxAge > 0 {
+		report, ok := a.Data.GetPortReport(sector)
+		if ok && time.Since(report.Time) < maxAge {
+			return report, nil
+		}
+	}
+
+	a.Sendf("cr%d\rq", sector)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-a.Broker.WaitFor(ctx, events.PORTREPORTDISPLAY, fmt.Sprint(sector)):
+	case <-a.Broker.WaitFor(ctx, events.PORTNOINFO, ""):
+		return nil, nil
+	}
+
+	report, ok := a.Data.GetPortReport(sector)
+	if !ok {
+		return nil, fmt.Errorf("unexpectedly didn't find port report")
+	}
+
+	return report, nil
 }
 
 func (a *Actuator) Twarp(ctx context.Context, destination int) error {
