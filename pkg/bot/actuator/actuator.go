@@ -345,9 +345,11 @@ func (a *Actuator) QueryWarps(ctx context.Context, sectorID int, block bool) {
 // BuyGTorpsAndDetonators buys the max gtorps and detonators. Must be run from
 // stardock sector. As an implementation detail, it declines to buy each item
 // once so the event parser can observe the max that's possible to buy.
+// Also buys shields since they can be impacted by navhaz.
 func (a *Actuator) BuyGTorpsAndDetonators(ctx context.Context) {
 	a.Send("psha\r")
 
+	// detonators
 	select {
 	case <-ctx.Done():
 		return
@@ -355,6 +357,7 @@ func (a *Actuator) BuyGTorpsAndDetonators(ctx context.Context) {
 		a.Send(fmt.Sprintf("a%d\r", e.DataInt))
 	}
 
+	// gtorps
 	a.Send("t\r")
 	select {
 	case <-ctx.Done():
@@ -362,10 +365,30 @@ func (a *Actuator) BuyGTorpsAndDetonators(ctx context.Context) {
 	case e := <-a.Broker.WaitFor(ctx, events.GTORPBUYMAX, ""):
 		a.Send(fmt.Sprintf("t%d\r", e.DataInt))
 	}
-	a.Send("qq")
+
+	// shields
+	a.Send("qsp")
+	select {
+	case <-ctx.Done():
+		return
+	case e := <-a.Broker.WaitFor(ctx, events.SHIELDSTOBUY, ""):
+		a.Send(fmt.Sprintf("c%d\r", e.DataInt))
+	}
+
+	a.Send("qqq")
 }
 
 func (a *Actuator) GoToSD(ctx context.Context) error {
+	// get stardock port if we don't already have it
+	if a.Data.Status.StarDock == 0 {
+		a.Send("v")
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-a.Broker.WaitFor(ctx, events.CONFIGDISPLAY, ""):
+		}
+	}
+
 	for _, hop := range a.Data.Settings.HopsToSD {
 		err := a.Twarp(ctx, hop.Sector)
 		if err != nil {
@@ -374,7 +397,7 @@ func (a *Actuator) GoToSD(ctx context.Context) error {
 		a.Land(hop.Planet)
 		a.Send("t\r\r1\rq")
 	}
-	a.MoveSafe(ctx, 8657, false)
+	a.MoveSafe(ctx, a.Data.Status.StarDock, false)
 	return nil
 }
 

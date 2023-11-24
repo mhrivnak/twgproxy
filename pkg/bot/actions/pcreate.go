@@ -86,5 +86,5 @@ func (p *pCreate) replenish(ctx context.Context) error {
 	p.actuator.BuyGTorpsAndDetonators(ctx)
 	// request quick stats so the status gets updated with replenished values
 	p.actuator.Send("/")
-	return p.actuator.Twarp(ctx, sector)
+	return p.actuator.MoveSafe(ctx, sector, false)
 }

@@ -593,7 +593,8 @@ func (b *Bot) ParseLine(line string) {
 		b.Broker.Publish(&events.Event{Kind: events.SHIPNOTAVAILABLE})
 	case strings.HasPrefix(clean, "I have no information about a port in that sector."):
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOINFO})
-
+	case strings.HasPrefix(clean, "Trade Wars 2002 Game Configuration and Status"):
+		b.parsers[parsers.CONFIGDISPLAY] = parsers.NewParseConfig(b.Broker, b.data)
 	}
 
 	for k, parser := range b.parsers {

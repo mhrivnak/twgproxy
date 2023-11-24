@@ -7,6 +7,7 @@ const (
 	BUYDETONATORS  = "buy detonators"
 	BUYGTORPS      = "buy gtorps"
 	CIMWARPS       = "cim warps"
+	CONFIGDISPLAY  = "config display"
 	CORPPLANETS    = "corp planet display"
 	DENSITYSCAN    = "density scan"
 	FIGDEPLOY      = "fig deploy"

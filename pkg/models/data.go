@@ -86,20 +86,21 @@ func NewData(db *gorm.DB) *Data {
 }
 
 type Status struct {
-	Creds   int
-	Exp     int
-	Figs    int
-	Holds   int
-	Fuel    int
-	Org     int
-	Equ     int
-	Sector  int
-	Ship    int
-	Shields int
-	GTorps  int
-	AtmDts  int
-	LRS     LRSType
-	TWarp   TWarpType
+	Creds    int
+	Exp      int
+	Figs     int
+	Holds    int
+	Fuel     int
+	Org      int
+	Equ      int
+	Sector   int
+	Ship     int
+	Shields  int
+	GTorps   int
+	AtmDts   int
+	LRS      LRSType
+	TWarp    TWarpType
+	StarDock int
 }
 
 type Persist struct {

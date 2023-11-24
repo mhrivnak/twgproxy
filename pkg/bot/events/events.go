@@ -13,6 +13,7 @@ const (
 	AVAILABLESHIPS        EventKind = "available ships"
 	BLINDJUMP             EventKind = "blind jump"
 	BUSTED                EventKind = "busted"
+	CONFIGDISPLAY         EventKind = "config display"
 	CORPPLANETLISTDISPLAY EventKind = "corp planet list display"
 	DENSITYDISPLAY        EventKind = "density report display"
 	DETONATORBUYMAX       EventKind = "detonator max to buy"
