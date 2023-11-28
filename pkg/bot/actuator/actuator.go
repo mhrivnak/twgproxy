@@ -530,6 +530,77 @@ func (a *Actuator) StripPlanet(ctx context.Context, fromID, toID int) error {
 	return nil
 }
 
+func (a *Actuator) RebalancePlanetPopulations(ctx context.Context) error {
+	var planetList []int
+
+	// get the list of planets
+	waitForPlanetList := a.Broker.WaitFor(ctx, events.PLANETLANDINGDISPLAY, "")
+	a.Send("lq\r")
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case e := <-waitForPlanetList:
+		planetList = e.DataSliceInt
+	}
+
+	for _, pID := range planetList {
+		var planet *models.Planet
+		var ok bool
+
+		for planet == nil {
+			a.Land(pID)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-a.Broker.WaitFor(ctx, events.PLANETDISPLAY, fmt.Sprint(pID)):
+				planet, ok = a.Data.GetPlanet(pID)
+				if !ok {
+					return fmt.Errorf("failed to get planet from data cache")
+				}
+				fmt.Printf("Got planet info for %d\n", pID)
+			case <-time.NewTimer(time.Second).C:
+				// occasionally the planet display event doesn't fire. Re-try.
+				fmt.Printf("RETRY %d\n", pID)
+				a.Send("q")
+			}
+		}
+
+		switch planet.Class {
+		case "M":
+			if planet.EquCols > 15000 {
+				toMove := planet.EquCols - 14600
+				a.Sendf("pn3%d\r1", toMove)
+				planet.FuelCols += toMove
+				planet.EquCols -= toMove
+			}
+			if planet.FuelCols > 15000 {
+				toMove := planet.FuelCols - 14600
+				a.Sendf("pn1%d\r2", toMove)
+				planet.OrgCols += toMove
+				planet.FuelCols -= toMove
+			}
+		case "O":
+			if planet.OrgCols > 100000 {
+				toMove := planet.OrgCols - 99000
+				a.Sendf("pn2%d\r1", toMove)
+				planet.FuelCols += toMove
+				planet.OrgCols -= toMove
+			}
+		case "H":
+			if planet.FuelCols > 50000 {
+				toMove := planet.FuelCols - 49500
+				a.Sendf("pn1%d\r3", toMove)
+				planet.EquCols += toMove
+				planet.FuelCols -= toMove
+			}
+		}
+		a.Send("q")
+	}
+
+	return nil
+}
+
 func parseSectors(route string) ([]int, error) {
 	parts := strings.Split(route, " > ")
 	sectors := make([]int, len(parts))

@@ -16,6 +16,7 @@ func NewPUpgrade(points string, actuator *actuator.Actuator) (Action, error) {
 	return Wrap(func(ctx context.Context) {
 		actuator.RouteWalk(ctx, parsedPoints, func() {
 			actuator.MassUpgrade(ctx, true)
+			actuator.RebalancePlanetPopulations(ctx)
 		})
 	}), nil
 }

@@ -235,6 +235,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 		}
 	case byte('p'):
+		// planet strip
 		if len(command) > 2 && command[1] == byte('s') {
 			fromID, toID, err := parsePStripArgs(string(command[2:]))
 			if err != nil {
@@ -247,6 +248,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 			return actions.NewPStrip(fromID, toID, b.Actuator)
 		}
+		// planet route trade
 		if len(command) > 2 && command[1] == byte('r') {
 			action, err := actions.NewPRouteTrade(string(command[2:]), b.Actuator)
 			if err != nil {
@@ -263,6 +265,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 			return action
 		}
+		// planet create
 		if len(command) > 2 && command[1] == byte('c') {
 			args, err := parsePCreateArgs(string(command[2:]))
 			if err != nil {
@@ -271,6 +274,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 			return actions.NewPCreate(args, b.Actuator)
 		}
+		// planet fig deploy
 		if len(command) > 3 && string(command[1:3]) == "fd" {
 			figs, err := strconv.Atoi(string(command[3:]))
 			if err != nil {
@@ -279,6 +283,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 			return actions.NewPFigDeploy(figs, b.Actuator)
 		}
+		// planet route upgrade
 		if len(command) > 2 && command[1] == byte('u') {
 			upgrade, err := actions.NewPUpgrade(string(command[2:]), b.Actuator)
 			if err != nil {
@@ -286,6 +291,9 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				return nil
 			}
 			return upgrade
+		}
+		if len(command) == 2 && command[1] == byte('b') {
+			return actions.WrapErr(b.Actuator.RebalancePlanetPopulations)
 		}
 	case byte('d'):
 		return actions.NewPDrop(b.Actuator)

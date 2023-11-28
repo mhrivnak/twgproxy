@@ -65,6 +65,14 @@ func (d *Data) GetShip(id int) (*Ship, bool) {
 	return s, ok
 }
 
+func (d *Data) GetPlanet(id int) (*Planet, bool) {
+	d.PlanetLock.Lock()
+	defer d.PlanetLock.Unlock()
+
+	s, ok := d.Planets[id]
+	return s, ok
+}
+
 func (d *Data) PutShip(s *Ship) {
 	d.ShipLock.Lock()
 	defer d.ShipLock.Unlock()
