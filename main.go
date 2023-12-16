@@ -53,7 +53,7 @@ func main() {
 		go copyNotify(user, gameInputTee, copyStop)
 
 		botStop := make(chan interface{})
-		bot.Start(user, botStop)
+		bot.Start(user, user, botStop)
 
 		select {
 		case <-copyStop:

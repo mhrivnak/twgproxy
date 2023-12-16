@@ -80,7 +80,7 @@ func byteChan(r io.Reader) <-chan byte {
 	return c
 }
 
-func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
+func (b *Bot) Start(userReader io.Reader, echoWriter io.Writer, done chan<- interface{}) {
 	// Setup listeners
 	b.Broker.Subscribe(events.BUSTED, listeners.NewBustHandler(b.Actuator))
 	b.Broker.Subscribe(events.SECTORDISPLAY, listeners.NewSectorHandler(b.Actuator))
@@ -101,6 +101,7 @@ func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
 					fmt.Println(err.Error())
 					return
 				}
+
 				switch int(line[i]) {
 				case 10: // \r
 					b.ParseLine(string(line[:i]))
@@ -134,6 +135,8 @@ func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
 			switch int(char) {
 			case 92: // "\"
 				data = []byte{char}
+				// echo what the user types
+				echoWriter.Write([]byte{char})
 			case 27: // ESC
 				data = []byte{}
 			case 8: // backspace
@@ -142,6 +145,9 @@ func (b *Bot) Start(userReader io.Reader, done chan<- interface{}) {
 				}
 			default:
 				if len(data) > 0 {
+					// echo what the user types
+					echoWriter.Write([]byte{char})
+
 					data = append(data, char)
 					if bytes.ContainsAny([]byte{char}, "\n\r") {
 						// parse the command and run an action if one is identified
