@@ -97,7 +97,6 @@ func (p *parsePlanet) finalize() {
 				return
 			}
 			planet.OreMax = fuelMax
-			fmt.Printf("max fuel %d\n", fuelMax)
 			cols, err := strconv.Atoi(removeCommas(parts[1]))
 			if err != nil {
 				fmt.Println(err.Error())
@@ -121,7 +120,6 @@ func (p *parsePlanet) finalize() {
 				return
 			}
 			planet.OrgMax = orgMax
-			fmt.Printf("max org %d\n", orgMax)
 			cols, err := strconv.Atoi(removeCommas(parts[1]))
 			if err != nil {
 				fmt.Println(err.Error())
@@ -145,7 +143,6 @@ func (p *parsePlanet) finalize() {
 				return
 			}
 			planet.EquMax = equMax
-			fmt.Printf("max equ %d\n", equMax)
 			cols, err := strconv.Atoi(removeCommas(parts[1]))
 			if err != nil {
 				fmt.Println(err.Error())
