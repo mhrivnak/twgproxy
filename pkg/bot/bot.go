@@ -295,6 +295,17 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 		if len(command) == 2 && command[1] == byte('b') {
 			return actions.WrapErr(b.Actuator.RebalancePlanetPopulations)
 		}
+		// gather product
+		if len(command) == 3 && command[1] == byte('g') {
+			product, err := models.ProductTypeFromChar(string(command[2]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return nil
+			}
+			return actions.WrapErr(func(ctx context.Context) error {
+				return b.Actuator.GatherResource(ctx, product)
+			})
+		}
 	case byte('d'):
 		return actions.NewPDrop(b.Actuator)
 	case byte('n'):

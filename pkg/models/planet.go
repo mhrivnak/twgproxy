@@ -9,6 +9,9 @@ type Planet struct {
 	Ore      int
 	Org      int
 	Equ      int
+	OreMax   int
+	OrgMax   int
+	EquMax   int
 	FuelCols int
 	OrgCols  int
 	EquCols  int
@@ -22,4 +25,28 @@ type PlanetCorpSummary struct {
 	Org  int
 	Equ  int
 	Figs int
+}
+
+func (p *Planet) ProductQuantity(product ProductType) int {
+	switch product {
+	case FUEL:
+		return p.Ore
+	case ORG:
+		return p.Org
+	case EQU:
+		return p.Equ
+	}
+	return -1
+}
+
+func (p *Planet) ProductMax(product ProductType) int {
+	switch product {
+	case FUEL:
+		return p.OreMax
+	case ORG:
+		return p.OrgMax
+	case EQU:
+		return p.EquMax
+	}
+	return -1
 }

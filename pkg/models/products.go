@@ -22,3 +22,15 @@ func ProductTypeFromChar(c string) (ProductType, error) {
 	}
 	return NONE, fmt.Errorf("invalid product type %s", c)
 }
+
+func (t ProductType) Num() int {
+	switch t {
+	case FUEL:
+		return 1
+	case ORG:
+		return 2
+	case EQU:
+		return 3
+	}
+	return -1
+}

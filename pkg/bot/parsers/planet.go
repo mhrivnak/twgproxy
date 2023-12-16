@@ -35,9 +35,9 @@ type parsePlanet struct {
 
 var planetInfo *regexp.Regexp = regexp.MustCompile(`^Planet #([0-9]+) in sector ([0-9]+): (.+)`)
 var classInfo *regexp.Regexp = regexp.MustCompile(`^Class ([A-Z])`)
-var fuelInfo *regexp.Regexp = regexp.MustCompile(`^Fuel Ore +?([0-9,]+) +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) `)
-var orgInfo *regexp.Regexp = regexp.MustCompile(`^Organics +?([0-9,]+) +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) `)
-var equInfo *regexp.Regexp = regexp.MustCompile(`^Equipment +?([0-9,]+) +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) `)
+var fuelInfo *regexp.Regexp = regexp.MustCompile(`^Fuel Ore +?([0-9,]+) +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) +?[0-9]+ +?([0-9,]+)`)
+var orgInfo *regexp.Regexp = regexp.MustCompile(`^Organics +?([0-9,]+) +?[0-9,N/A]+ +?[0-9,]+ +?([0-9,]+) +?[0-9]+ +?([0-9,]+)`)
+var equInfo *regexp.Regexp = regexp.MustCompile(`^Equipment +?([0-9,]+) +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) +?[0-9]+ +?([0-9,]+)`)
 var citatelInfo *regexp.Regexp = regexp.MustCompile(`^Planet has a level ([0-6]) Citadel`)
 var figsInfo *regexp.Regexp = regexp.MustCompile(`^Fighters +?N/A +?[0-9,]+ +?[0-9,]+ +?([0-9,]+) `)
 
@@ -82,7 +82,7 @@ func (p *parsePlanet) finalize() {
 			planet.Class = parts[1]
 		case strings.HasPrefix(line, "Fuel Ore"):
 			parts := fuelInfo.FindStringSubmatch(line)
-			if len(parts) != 3 {
+			if len(parts) != 4 {
 				continue
 			}
 			fuel, err := strconv.Atoi(removeCommas(parts[2]))
@@ -91,6 +91,13 @@ func (p *parsePlanet) finalize() {
 				return
 			}
 			planet.Ore = fuel
+			fuelMax, err := strconv.Atoi(removeCommas(parts[3]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.OreMax = fuelMax
+			fmt.Printf("max fuel %d\n", fuelMax)
 			cols, err := strconv.Atoi(removeCommas(parts[1]))
 			if err != nil {
 				fmt.Println(err.Error())
@@ -99,7 +106,7 @@ func (p *parsePlanet) finalize() {
 			planet.FuelCols = cols
 		case strings.HasPrefix(line, "Organics"):
 			parts := orgInfo.FindStringSubmatch(line)
-			if len(parts) != 3 {
+			if len(parts) != 4 {
 				continue
 			}
 			org, err := strconv.Atoi(removeCommas(parts[2]))
@@ -108,6 +115,13 @@ func (p *parsePlanet) finalize() {
 				return
 			}
 			planet.Org = org
+			orgMax, err := strconv.Atoi(removeCommas(parts[3]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.OrgMax = orgMax
+			fmt.Printf("max org %d\n", orgMax)
 			cols, err := strconv.Atoi(removeCommas(parts[1]))
 			if err != nil {
 				fmt.Println(err.Error())
@@ -116,7 +130,7 @@ func (p *parsePlanet) finalize() {
 			planet.OrgCols = cols
 		case strings.HasPrefix(line, "Equipment"):
 			parts := equInfo.FindStringSubmatch(line)
-			if len(parts) != 3 {
+			if len(parts) != 4 {
 				continue
 			}
 			equ, err := strconv.Atoi(removeCommas(parts[2]))
@@ -125,6 +139,13 @@ func (p *parsePlanet) finalize() {
 				return
 			}
 			planet.Equ = equ
+			equMax, err := strconv.Atoi(removeCommas(parts[3]))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			planet.EquMax = equMax
+			fmt.Printf("max equ %d\n", equMax)
 			cols, err := strconv.Atoi(removeCommas(parts[1]))
 			if err != nil {
 				fmt.Println(err.Error())

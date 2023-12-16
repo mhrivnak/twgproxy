@@ -37,7 +37,7 @@ func (a *Actuator) Sendf(command string, args ...any) error {
 }
 
 func (a *Actuator) Land(planetID int) {
-	a.Send(fmt.Sprintf("l%d\r", planetID))
+	a.Sendf("l%d\r", planetID)
 }
 
 func (a *Actuator) MombotSend(ctx context.Context, command string) {
@@ -530,6 +530,96 @@ func (a *Actuator) StripPlanet(ctx context.Context, fromID, toID int) error {
 	return nil
 }
 
+func (a *Actuator) GatherResource(ctx context.Context, product models.ProductType) error {
+	var startID int
+	for startID == 0 {
+		wait := a.Broker.WaitFor(ctx, events.PLANETDISPLAY, "")
+		a.Send("\r")
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case e := <-wait:
+			startID = e.DataInt
+		case <-time.After(time.Second):
+			// for some reason the planet display event is getting missed a lot.
+			// fallback is to keep trying.
+			fmt.Println("timeout waiting for planet display")
+		}
+	}
+
+	a.Data.PlanetLock.Lock()
+	start, ok := a.Data.Planets[startID]
+	a.Data.PlanetLock.Unlock()
+	if !ok {
+		return fmt.Errorf("start planet not in cache")
+	}
+
+	holds := a.Data.Status.Holds
+
+	startQuantity := start.ProductQuantity(product)
+	startMax := start.ProductMax(product)
+
+	var planetList []int
+
+	// get the list of planets
+	waitForPlanetList := a.Broker.WaitFor(ctx, events.PLANETLANDINGDISPLAY, "")
+	a.Send("qlq\r")
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case e := <-waitForPlanetList:
+		planetList = e.DataSliceInt
+	}
+
+	for _, pID := range planetList {
+		if pID == startID {
+			continue
+		}
+
+		if startQuantity == startMax {
+			a.Land(startID)
+			return nil
+		}
+
+		var planet *models.Planet
+		var ok bool
+
+		for planet == nil {
+			a.Land(pID)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-a.Broker.WaitFor(ctx, events.PLANETDISPLAY, fmt.Sprint(pID)):
+				planet, ok = a.Data.GetPlanet(pID)
+				if !ok {
+					return fmt.Errorf("failed to get planet from data cache")
+				}
+				fmt.Printf("Got planet info for %d\n", pID)
+			case <-time.NewTimer(time.Second).C:
+				// occasionally the planet display event doesn't fire. Re-try.
+				fmt.Printf("RETRY %d\n", pID)
+				a.Send("q")
+			}
+		}
+
+		toMove := min(planet.ProductQuantity(product), startMax-startQuantity)
+		for q := toMove; q > 0; q -= holds {
+			if q < holds {
+				a.Sendf("tnt%d%d\rq", product.Num(), q)
+			} else {
+				a.Sendf("tnt%d\rq", product.Num())
+			}
+			a.Sendf("l%d\rtnl%d\rql%d\r", startID, product.Num(), pID)
+		}
+		startQuantity += toMove
+		a.Send("q")
+	}
+	a.Land(startID)
+
+	return nil
+}
+
 func (a *Actuator) RebalancePlanetPopulations(ctx context.Context) error {
 	var planetList []int
 
@@ -612,4 +702,14 @@ func parseSectors(route string) ([]int, error) {
 		sectors[i] = sector
 	}
 	return sectors, nil
+}
+
+func min(nums ...int) int {
+	x := nums[0]
+	for i := range nums {
+		if nums[i] < x {
+			x = nums[i]
+		}
+	}
+	return x
 }
