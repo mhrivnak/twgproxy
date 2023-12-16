@@ -29,7 +29,7 @@ var figInfo *regexp.Regexp = regexp.MustCompile(`^Fighters: ([0-9,]+) \((.+?)\) 
 var minesInfo *regexp.Regexp = regexp.MustCompile(`^Mines   : ([0-9]+) \(Type 1 Armid\) \(([A-Za-z ]+)\)`)
 var warpsInfo *regexp.Regexp = regexp.MustCompile(`^Warps to Sector\(s\) :  ([()0-9 -]+)`)
 var traderInfo0 *regexp.Regexp = regexp.MustCompile(`([a-zA-Z0-9 ]+), w/ ([0-9,]+) ftrs`)
-var traderInfo1 *regexp.Regexp = regexp.MustCompile(`\(([a-zA-Z ]+)\)`)
+var traderInfo1 *regexp.Regexp = regexp.MustCompile(`\(([0-9a-zA-Z ]+)\)`)
 
 func (p *ParseSector) Parse(line string) error {
 	p.lines = append(p.lines, line)
@@ -64,6 +64,7 @@ func (p *ParseSector) finalize() {
 	}
 	num, err := strconv.Atoi(parts[1])
 	if err != nil {
+		fmt.Println("failed to parse sector number")
 		return
 	}
 
@@ -178,7 +179,7 @@ func (p *ParseSector) finalize() {
 			} else {
 				parts := traderInfo1.FindStringSubmatch(line)
 				if len(parts) != 2 {
-					fmt.Printf("failed to parse trader info: %s\n", line)
+					fmt.Printf("failed to parse ship type: %s\n", line)
 					parsingTraders = false
 					continue
 				}
