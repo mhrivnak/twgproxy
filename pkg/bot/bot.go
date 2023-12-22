@@ -130,13 +130,23 @@ func (b *Bot) Start(userReader io.Reader, echoWriter io.Writer, done chan<- inte
 		// parse user input
 		input := byteChan(userReader)
 
-		data := []byte{}
+		var data, lastCommand []byte
 		for char := range input {
 			switch int(char) {
 			case 92: // "\"
-				data = []byte{char}
-				// echo what the user types
-				echoWriter.Write([]byte{char})
+				// if two backslashes, run the prior command again
+				if len(data) == 1 && data[0] == char {
+					// parse the command and run an action if one is identified
+					action := b.ParseCommand(lastCommand[1 : len(lastCommand)-1])
+					if action != nil {
+						b.runAction(action, input)
+					}
+					data = []byte{}
+				} else {
+					data = []byte{char}
+					// echo what the user types
+					echoWriter.Write([]byte{char})
+				}
 			case 27: // ESC
 				data = []byte{}
 			case 8: // backspace
@@ -152,10 +162,11 @@ func (b *Bot) Start(userReader io.Reader, echoWriter io.Writer, done chan<- inte
 					if bytes.ContainsAny([]byte{char}, "\n\r") {
 						// parse the command and run an action if one is identified
 						action := b.ParseCommand(data[1 : len(data)-1])
-						data = []byte{}
 						if action != nil {
 							b.runAction(action, input)
+							lastCommand = data
 						}
+						data = []byte{}
 					}
 				} else {
 					_, err := b.commandWriter.Write([]byte{char})
@@ -224,6 +235,9 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			case byte('w'):
 				b.parsers[parsers.CIMWARPS] = parsers.NewCIMWarpsParser(b.data.Persist.WarpCache)
 				return actions.NewCIMWarpUpdate(b.Actuator)
+			// clear the current sector from the void list
+			case byte('v'):
+				b.Actuator.ClearVoid(b.data.Status.Sector)
 			}
 		}
 	case byte('a'):

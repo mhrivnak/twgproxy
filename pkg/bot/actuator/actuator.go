@@ -475,6 +475,10 @@ func (a *Actuator) MombotPlanetSell(ctx context.Context, product models.ProductT
 	}
 }
 
+func (a *Actuator) ClearVoid(sector int) {
+	a.Sendf("cv0\ryn%d\rq", sector)
+}
+
 func (a *Actuator) StripPlanet(ctx context.Context, fromID, toID int) error {
 	wait := a.Broker.WaitFor(ctx, events.PLANETDISPLAY, "")
 	a.Send(fmt.Sprintf("l%d\r", fromID))
