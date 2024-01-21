@@ -243,6 +243,8 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 	case byte('a'):
 		if len(command) > 1 {
 			switch command[1] {
+			case byte('r'):
+				return actions.WrapErr(b.Actuator.Refurb)
 			case byte('u'):
 				return actions.NewUnsurround(b.Actuator)
 			case byte('s'):

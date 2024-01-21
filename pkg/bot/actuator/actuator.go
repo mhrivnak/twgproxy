@@ -695,6 +695,38 @@ func (a *Actuator) RebalancePlanetPopulations(ctx context.Context) error {
 	return nil
 }
 
+func (a *Actuator) Refurb(ctx context.Context) error {
+	a.Send("pt")
+	shieldsChan := a.Broker.WaitFor(ctx, events.SHIELDSTOBUY, "")
+	// buy shields
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case e := <-shieldsChan:
+		if e.DataInt > 0 {
+			a.Sendf("c%d\r", e.DataInt)
+		} else {
+			// re-display so a new FIGSTOBUY event displays
+			a.Send("\r")
+		}
+	}
+
+	figsChan := a.Broker.WaitFor(ctx, events.FIGSTOBUY, "")
+	// buy figs
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case e := <-figsChan:
+		if e.DataInt > 0 {
+			a.Sendf("b%d\r", e.DataInt)
+		}
+	}
+
+	a.Send("q/")
+
+	return nil
+}
+
 func parseSectors(route string) ([]int, error) {
 	parts := strings.Split(route, " > ")
 	sectors := make([]int, len(parts))
