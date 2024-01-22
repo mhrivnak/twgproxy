@@ -94,7 +94,7 @@ func (p *ParseQuickStats) finalize() {
 				fmt.Println("error parsing holds")
 			}
 			p.data.Status.Holds = holds
-		case "Fuel":
+		case "Ore":
 			fuel, err := strconv.Atoi(removeCommas(parts[2]))
 			if err != nil {
 				fmt.Println("error parsing fuel")
