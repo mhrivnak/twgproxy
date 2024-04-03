@@ -56,6 +56,8 @@ var tradeComplete *regexp.Regexp = regexp.MustCompile(`You have [0-9,]+ credits 
 var holdsToBuy *regexp.Regexp = regexp.MustCompile(`^A  Cargo holds +: +[0-9]+ credits / next hold +([0-9]+)`)
 var figsToBuy *regexp.Regexp = regexp.MustCompile(`^B  Fighters +: +[0-9]+ credits per fighter +([0-9]+)`)
 var shieldsToBuy *regexp.Regexp = regexp.MustCompile(`^C  Shield Points +: +[0-9]+ credits per point +([0-9]+)`)
+var figsDestroyed *regexp.Regexp = regexp.MustCompile(`([0-9]+) K3-A Fighters destroyed by the attack!`)
+var youHaveCreds *regexp.Regexp = regexp.MustCompile(`You have ([0-9,]+) credits and [0-9]+ empty cargo holds.`)
 
 func byteChan(r io.Reader) <-chan byte {
 	c := make(chan byte)
@@ -557,19 +559,6 @@ func (b *Bot) ParseLine(line string) {
 		b.Broker.Publish(&events.Event{Kind: events.BUSTED, DataInt: b.data.Status.Sector})
 	case strings.Contains(clean, "has warps to sector(s) :"):
 		b.parsers[parsers.SECTORWARPS] = parsers.NewSectorWarpsParser(b.Broker, b.data)
-	case strings.Contains(clean, "empty cargo holds."):
-		parts := tradeComplete.FindStringSubmatch(clean)
-		if len(parts) == 2 {
-			empty, err := strconv.Atoi(parts[1])
-			if err != nil {
-				fmt.Printf("failed to parse empty holds: %s\n", err.Error())
-				return
-			}
-			b.Broker.Publish(&events.Event{
-				Kind:    events.TRADECOMPLETE,
-				DataInt: empty,
-			})
-		}
 	case strings.Contains(clean, "We're not interested."):
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	case strings.Contains(clean, "When you want to make me a real offer, drop back by."):
@@ -585,6 +574,8 @@ func (b *Bot) ParseLine(line string) {
 	case strings.Contains(clean, "I think you'd better leave if you value your life!"):
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	case strings.Contains(clean, "How have you survived this long?  Get lost, I'm not interested."):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "HA!  You crack me up.  Now get lost."):
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	case strings.Contains(clean, "Available Ship Scan"):
 		b.parsers[parsers.AVAILABLESHIPS] = parsers.NewParseAvailableShipScan(b.Broker, b.data)
@@ -636,6 +627,37 @@ func (b *Bot) ParseLine(line string) {
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOINFO})
 	case strings.HasPrefix(clean, "Trade Wars 2002 Game Configuration and Status"):
 		b.parsers[parsers.CONFIGDISPLAY] = parsers.NewParseConfig(b.Broker, b.data)
+	case strings.Contains(clean, "K3-A Fighters destroyed by the attack!"):
+		parts := figsDestroyed.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			figs, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return
+			}
+			b.data.Status.Figs -= figs
+			b.Broker.Publish(&events.Event{
+				Kind:    events.FIGSDESTROYED,
+				DataInt: figs,
+			})
+		}
+	case strings.HasPrefix(clean, "Your ship's shields absorb most of their attack!"):
+		b.Broker.Publish(&events.Event{
+			Kind: events.SHIELDSABSORBEDATTACK,
+		})
+	case strings.HasPrefix(clean, "You have "):
+		parts := youHaveCreds.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			creds, err := strconv.Atoi(strings.ReplaceAll(parts[1], ",", ""))
+			if err != nil {
+				fmt.Printf("failed to parse credits: %s\n", err)
+				return
+			}
+			b.data.Status.Creds = creds
+			b.Broker.Publish(&events.Event{
+				Kind:    events.YOUHAVECREDS,
+				DataInt: creds,
+			})
+		}
 	}
 
 	for k, parser := range b.parsers {

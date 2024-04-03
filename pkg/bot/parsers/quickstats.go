@@ -118,6 +118,12 @@ func (p *ParseQuickStats) finalize() {
 				fmt.Println("error parsing exp")
 			}
 			p.data.Status.Exp = exp
+		case "Aln":
+			aln, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println("error parsing alignment")
+			}
+			p.data.Status.Alignment = aln
 		case "GTorp":
 			gtorps, err := strconv.Atoi(removeCommas(parts[2]))
 			if err != nil {

@@ -32,17 +32,19 @@ func (p *explore) Start(ctx context.Context) <-chan struct{} {
 func (p *explore) run(ctx context.Context) {
 	defer close(p.done)
 
-	for i := p.startSector; i <= 20000; i++ {
-		fmt.Printf("exploring to sector %d", i)
+	for i := p.startSector; i <= 30000; i++ {
+		fmt.Printf("exploring to sector %d\n", i)
 		opts := actuator.MoveOptions{
-			DropFigs:      1,
-			MinFigs:       1000,
-			EnemyFigsMax:  1000,
-			EnemyMinesMax: 50,
+			DropFigs:        1,
+			MinFigs:         49000,
+			EnemyFigsMax:    50000,
+			EnemyMinesMax:   50,
+			RefurbAndReturn: true,
+			BuyFuel:         true,
 		}
-		err := p.actuator.Move(ctx, i, opts, true)
+		err := p.actuator.Move(ctx, i, opts, false)
 		if err != nil {
-			fmt.Printf("error: %s", err.Error())
+			fmt.Printf("error: %s\n", err.Error())
 			return
 		}
 	}

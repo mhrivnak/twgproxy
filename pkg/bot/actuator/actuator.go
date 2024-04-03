@@ -151,11 +151,18 @@ func (a *Actuator) RouteTo(ctx context.Context, sector int) ([]int, error) {
 }
 
 type MoveOptions struct {
-	DropFigs      int
-	EnemyFigsMax  int
-	EnemyMinesMax int
-	MinFigs       int
-	SectorFunc    func(context.Context, int) error
+	DropFigs        int
+	EnemyFigsMax    int
+	EnemyMinesMax   int
+	MinFigs         int
+	SectorFunc      func(context.Context, int) error
+	RefurbAndReturn bool
+	BuyFuel         bool
+}
+
+func (m MoveOptions) WithoutRefurbAndReturn() MoveOptions {
+	m.RefurbAndReturn = false
+	return m
 }
 
 func (a *Actuator) MoveSafe(ctx context.Context, dest int, block bool) error {
@@ -197,6 +204,7 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 	// ignore the first sector, which is the one we're in
 	for _, sector := range sectors[1:] {
 		attackCommand := ""
+		offensiveFigs := false
 		if a.Data.Status.LRS == models.LRSHOLO {
 			a.Send("sh")
 
@@ -207,19 +215,33 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 					return fmt.Errorf("failed to get cached info on sector %d", sector)
 				}
 				switch {
-				case !sInfo.FigsFriendly && sInfo.Figs > opts.EnemyFigsMax:
+				case !sInfo.FigsFriendly && float64(sInfo.Figs)/1.1 > float64(min(opts.EnemyFigsMax, a.Data.Status.Figs)):
 					return fmt.Errorf("too many enemy figs ahead")
 				case !sInfo.MinesFriendly && sInfo.Mines > opts.EnemyMinesMax:
 					return fmt.Errorf("too many enemy mines ahead")
 				}
 				if sInfo.Figs > 0 && !sInfo.FigsFriendly && sInfo.FigType != models.FigTypeOffensive {
-					attackCommand = "a999\r"
+					attackCommand = "a10000\r"
+				}
+				if sInfo.FigType == models.FigTypeOffensive {
+					offensiveFigs = true
 				}
 			case <-ctx.Done():
 				return ctx.Err()
 			}
 		}
 
+		// setup waits in advance so we don't miss the text
+		sectorDisplayWait := a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector))
+		var figsDestroyedWait <-chan (*events.Event)
+		var shieldsAbsorbedWait <-chan (*events.Event)
+
+		if offensiveFigs {
+			figsDestroyedWait = a.Broker.WaitFor(ctx, events.FIGSDESTROYED, "")
+			shieldsAbsorbedWait = a.Broker.WaitFor(ctx, events.SHIELDSABSORBEDATTACK, "")
+		}
+
+		// move to the next sector
 		a.Sendf("%d\r", sector)
 		if attackCommand != "" {
 			a.Send(attackCommand)
@@ -229,13 +251,70 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sector)):
+		case <-sectorDisplayWait:
+		}
+
+		// wait for the message about how many figs were destroyed
+		if offensiveFigs {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-figsDestroyedWait:
+			case <-shieldsAbsorbedWait:
+			}
+		}
+
+		// if we may have lost figs, update info
+		if offensiveFigs || attackCommand != "" {
+			fmt.Println("getting quick stats in case we lost figs")
+			a.Send("/")
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-a.Broker.WaitFor(ctx, events.QUICKSTATDISPLAY, ""):
+			}
 		}
 
 		sInfo, ok := a.Data.GetSector(sector)
 		if !ok {
 			return fmt.Errorf("failed to get cached info on sector %d", sector)
 		}
+
+		if opts.BuyFuel {
+			if a.Data.Status.Fuel < a.Data.Status.Holds && sInfo.Port != nil && sInfo.Port.Type[0] == 'S' {
+				report, err := a.GetPortReport(ctx, sector, 60*time.Second)
+				if err != nil {
+					fmt.Printf("error getting port report: %s\n", err)
+				} else {
+					if report.Fuel.Trading > a.Data.Status.Holds-a.Data.Status.Fuel {
+						a.BuyFuel(ctx)
+						fmt.Println("done with call to buy fuel")
+						a.Send("/")
+					}
+				}
+			}
+		}
+
+		if opts.RefurbAndReturn && a.Data.Status.Figs < opts.MinFigs {
+			// twarp to 1 if we have full fuel and are good
+			if a.Data.Status.Alignment > 1000 && a.Data.Status.Fuel == a.Data.Status.Holds {
+				a.Send("1\ryy")
+			} else {
+				err := a.Move(ctx, 1, opts.WithoutRefurbAndReturn(), false)
+				if err != nil {
+					return err
+				}
+			}
+			err = a.Refurb(ctx)
+			if err != nil {
+				return err
+			}
+			err = a.Move(ctx, sector, opts, false)
+			if err != nil {
+				return err
+			}
+		}
+
 		// should we drop figs and we have enough?
 		if opts.DropFigs > 0 && !sInfo.IsFedSpace && a.Data.Status.Figs-opts.DropFigs >= opts.MinFigs {
 			// does the sector need more figs?
@@ -266,6 +345,30 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 	}
 
 	return nil
+}
+
+func (a *Actuator) BuyFuel(ctx context.Context) {
+	fmt.Println("buying fuel")
+
+	a.Send("pt\r")
+	// wait for the first statement with the port report
+	<-a.Broker.WaitFor(ctx, events.YOUHAVECREDS, "")
+
+	fmt.Println("waiting for result of fuel purchase")
+	select {
+	case <-ctx.Done():
+		return
+	case <-a.Broker.WaitFor(ctx, events.PORTNOTINTERESTED, ""):
+		// try again
+		fmt.Println("fuel purchase did not go through; trying again.")
+		// send two "0" ammounts in case the port also sells other products. If
+		// not, these are harmless at the command prompt.
+		a.Send("0\r0\r")
+		a.BuyFuel(ctx)
+	case <-a.Broker.WaitFor(ctx, events.YOUHAVECREDS, ""):
+		fmt.Println("fuel purchase was successful")
+		return
+	}
 }
 
 func (a *Actuator) LandNewest(ctx context.Context) error {
