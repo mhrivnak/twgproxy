@@ -82,7 +82,9 @@ func byteChan(r io.Reader) <-chan byte {
 	return c
 }
 
-func (b *Bot) Start(userReader io.Reader, echoWriter io.Writer, done chan<- interface{}) {
+// Start will read from userReader, parse the text in-flight, and write it (or
+// modified) data to the userWriter.
+func (b *Bot) Start(userReader io.Reader, userWriter io.Writer, done chan<- interface{}) {
 	// Setup listeners
 	b.Broker.Subscribe(events.BUSTED, listeners.NewBustHandler(b.Actuator))
 	b.Broker.Subscribe(events.SECTORDISPLAY, listeners.NewSectorHandler(b.Actuator))
@@ -106,7 +108,12 @@ func (b *Bot) Start(userReader io.Reader, echoWriter io.Writer, done chan<- inte
 
 				switch int(line[i]) {
 				case 10: // \r
-					b.ParseLine(string(line[:i]))
+					suffix := b.ParseLine(string(line[:i]))
+					userWriter.Write([]byte{line[i]})
+					if suffix != "" {
+						// write the suffix to the user
+						userWriter.Write([]byte(suffix + "\r\n"))
+					}
 					break loop
 				case 58: // :
 					b.checkForFigHit(string(line[:i]))
@@ -114,11 +121,17 @@ func (b *Bot) Start(userReader io.Reader, echoWriter io.Writer, done chan<- inte
 					b.checkForMombotPrompt(string(line[:i+1]))
 				case 63: // ?
 					//fmt.Println(string(line[:i+1]))
-					if alreadyCheckedForPrompt {
-						continue
+					if !alreadyCheckedForPrompt {
+						b.checkForPrompt(string(line[:i+1]))
+						alreadyCheckedForPrompt = true
 					}
-					b.checkForPrompt(string(line[:i+1]))
-					alreadyCheckedForPrompt = true
+				}
+
+				// write the byte to the user
+				_, err = userWriter.Write([]byte{line[i]})
+				if err != nil {
+					fmt.Println(err.Error())
+					return
 				}
 			}
 			alreadyCheckedForPrompt = false
@@ -147,7 +160,7 @@ func (b *Bot) Start(userReader io.Reader, echoWriter io.Writer, done chan<- inte
 				} else {
 					data = []byte{char}
 					// echo what the user types
-					echoWriter.Write([]byte{char})
+					userWriter.Write([]byte{char})
 				}
 			case 27: // ESC
 				data = []byte{}
@@ -158,7 +171,7 @@ func (b *Bot) Start(userReader io.Reader, echoWriter io.Writer, done chan<- inte
 			default:
 				if len(data) > 0 {
 					// echo what the user types
-					echoWriter.Write([]byte{char})
+					userWriter.Write([]byte{char})
 
 					data = append(data, char)
 					if bytes.ContainsAny([]byte{char}, "\n\r") {
@@ -493,19 +506,37 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 	return nil
 }
 
-func (b *Bot) ParseLine(line string) {
+var sectorInfo *regexp.Regexp = regexp.MustCompile(`^Sector  : (\d+)`)
+
+// ParseLine returs a string that should be displayed to the user as a suffix or
+// as a second line.
+func (b *Bot) ParseLine(line string) string {
 	clean := ansiPattern.ReplaceAllString(line, "")
+	suffix := ""
 
 	switch {
 	case strings.HasPrefix(clean, "Warping to Sector"):
 		sector, err := parseWarping(clean)
 		if err != nil {
 			fmt.Println(err.Error())
-			return
+			return ""
 		}
 		b.data.Status.Sector = sector
 	case strings.HasPrefix(clean, "Sector  : "):
 		b.parsers[parsers.SECTORINFO] = parsers.NewSectorParser(b.data, b.Broker)
+		parts := sectorInfo.FindStringSubmatch(clean)
+		if len(parts) != 2 {
+			return ""
+		}
+		num, err := strconv.Atoi(parts[1])
+		if err != nil {
+			fmt.Println("failed to parse sector number")
+			return ""
+		}
+		sec, ok := b.data.Persist.SectorCache.Get(num)
+		if ok && sec.Busted != nil {
+			suffix = "<<< BUSTED >>>"
+		}
 	case strings.HasPrefix(clean, "The shortest path ("):
 		b.parsers[parsers.ROUTEINFO] = parsers.NewRouteParser(b.Broker)
 	case strings.HasPrefix(clean, "Planet #"):
@@ -590,7 +621,7 @@ func (b *Bot) ParseLine(line string) {
 		if len(parts) == 2 {
 			holds, err := strconv.Atoi(parts[1])
 			if err != nil {
-				return
+				return ""
 			}
 			b.Broker.Publish(&events.Event{
 				Kind:    events.HOLDSTOBUY,
@@ -602,7 +633,7 @@ func (b *Bot) ParseLine(line string) {
 		if len(parts) == 2 {
 			figs, err := strconv.Atoi(parts[1])
 			if err != nil {
-				return
+				return ""
 			}
 			b.Broker.Publish(&events.Event{
 				Kind:    events.FIGSTOBUY,
@@ -614,7 +645,7 @@ func (b *Bot) ParseLine(line string) {
 		if len(parts) == 2 {
 			shields, err := strconv.Atoi(parts[1])
 			if err != nil {
-				return
+				return ""
 			}
 			b.Broker.Publish(&events.Event{
 				Kind:    events.SHIELDSTOBUY,
@@ -632,7 +663,7 @@ func (b *Bot) ParseLine(line string) {
 		if len(parts) == 2 {
 			figs, err := strconv.Atoi(parts[1])
 			if err != nil {
-				return
+				return ""
 			}
 			b.data.Status.Figs -= figs
 			b.Broker.Publish(&events.Event{
@@ -650,7 +681,7 @@ func (b *Bot) ParseLine(line string) {
 			creds, err := strconv.Atoi(strings.ReplaceAll(parts[1], ",", ""))
 			if err != nil {
 				fmt.Printf("failed to parse credits: %s\n", err)
-				return
+				return ""
 			}
 			b.data.Status.Creds = creds
 			b.Broker.Publish(&events.Event{
@@ -669,6 +700,7 @@ func (b *Bot) ParseLine(line string) {
 			delete(b.parsers, k)
 		}
 	}
+	return suffix
 }
 
 func (b *Bot) checkForPrompt(line string) {

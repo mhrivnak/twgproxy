@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"os"
 
@@ -39,8 +38,7 @@ func main() {
 	}
 	defer s.Close()
 
-	gameParseR, gameParseW := io.Pipe()
-	bot := bot.New(gameParseR, game, db)
+	bot := bot.New(game, game, db)
 
 	for {
 		user, err := s.Accept()
@@ -48,23 +46,10 @@ func main() {
 			panic(err)
 		}
 
-		copyStop := make(chan interface{})
-		gameInputTee := io.TeeReader(game, gameParseW)
-		go copyNotify(user, gameInputTee, copyStop)
-
 		botStop := make(chan interface{})
 		bot.Start(user, user, botStop)
 
-		select {
-		case <-copyStop:
-			fmt.Println("got STOP signal from copyNotify")
-		case <-botStop:
-			fmt.Println("got STOP signal from bot")
-		}
+		<-botStop
+		fmt.Println("got STOP signal from bot")
 	}
-}
-
-func copyNotify(dst io.Writer, src io.Reader, done chan interface{}) {
-	io.Copy(dst, src)
-	close(done)
 }
