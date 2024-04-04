@@ -36,8 +36,8 @@ func (p *explore) run(ctx context.Context) {
 		fmt.Printf("exploring to sector %d\n", i)
 		opts := actuator.MoveOptions{
 			DropFigs:        1,
-			MinFigs:         49000,
-			EnemyFigsMax:    50000,
+			MinFigs:         19000,
+			EnemyFigsMax:    100,
 			EnemyMinesMax:   50,
 			RefurbAndReturn: true,
 			BuyFuel:         true,
