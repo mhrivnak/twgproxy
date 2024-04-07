@@ -86,6 +86,7 @@ func (w *wsst) genMoveOptions() actuator.MoveOptions {
 		DropFigs:     1,
 		EnemyFigsMax: (w.actuator.Data.Status.Figs + w.actuator.Data.Status.Shields) / 3,
 		MinFigs:      100,
+		AutoAvoid:    true,
 	}
 }
 

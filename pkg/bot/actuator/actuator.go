@@ -158,6 +158,7 @@ type MoveOptions struct {
 	SectorFunc      func(context.Context, int) error
 	RefurbAndReturn bool
 	BuyFuel         bool
+	AutoAvoid       bool
 }
 
 func (m MoveOptions) WithoutRefurbAndReturn() MoveOptions {
@@ -216,8 +217,16 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 				}
 				switch {
 				case !sInfo.FigsFriendly && float64(sInfo.Figs)/1.1 > float64(min(opts.EnemyFigsMax, a.Data.Status.Figs)):
+					if opts.AutoAvoid {
+						a.Sendf("cv%d\rq", sector)
+						return a.Move(ctx, dest, opts, block)
+					}
 					return fmt.Errorf("too many enemy figs ahead")
 				case !sInfo.MinesFriendly && sInfo.Mines > opts.EnemyMinesMax:
+					if opts.AutoAvoid {
+						a.Sendf("cv%d\rq", sector)
+						return a.Move(ctx, dest, opts, block)
+					}
 					return fmt.Errorf("too many enemy mines ahead")
 				}
 				if sInfo.Figs > 0 && !sInfo.FigsFriendly && sInfo.FigType != models.FigTypeOffensive {
