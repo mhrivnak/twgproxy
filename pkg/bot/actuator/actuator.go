@@ -188,7 +188,6 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 
 	stop := make(chan interface{})
 	defer close(stop)
-
 	go func() {
 		for {
 			select {
@@ -205,7 +204,7 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 	// ignore the first sector, which is the one we're in
 	for _, sector := range sectors[1:] {
 		attackCommand := ""
-		offensiveFigs := false
+		offensiveEnemyFigs := false
 		if a.Data.Status.LRS == models.LRSHOLO {
 			a.Send("sh")
 
@@ -232,8 +231,8 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 				if sInfo.Figs > 0 && !sInfo.FigsFriendly && sInfo.FigType != models.FigTypeOffensive {
 					attackCommand = "a10000\r"
 				}
-				if sInfo.FigType == models.FigTypeOffensive {
-					offensiveFigs = true
+				if sInfo.FigType == models.FigTypeOffensive && !sInfo.FigsFriendly {
+					offensiveEnemyFigs = true
 				}
 			case <-ctx.Done():
 				return ctx.Err()
@@ -245,7 +244,7 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 		var figsDestroyedWait <-chan (*events.Event)
 		var shieldsAbsorbedWait <-chan (*events.Event)
 
-		if offensiveFigs {
+		if offensiveEnemyFigs {
 			figsDestroyedWait = a.Broker.WaitFor(ctx, events.FIGSDESTROYED, "")
 			shieldsAbsorbedWait = a.Broker.WaitFor(ctx, events.SHIELDSABSORBEDATTACK, "")
 		}
@@ -264,7 +263,7 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 		}
 
 		// wait for the message about how many figs were destroyed
-		if offensiveFigs {
+		if offensiveEnemyFigs {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -274,7 +273,7 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 		}
 
 		// if we may have lost figs, update info
-		if offensiveFigs || attackCommand != "" {
+		if offensiveEnemyFigs || attackCommand != "" {
 			fmt.Println("getting quick stats in case we lost figs")
 			a.Send("/")
 			select {
