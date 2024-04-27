@@ -489,14 +489,22 @@ func (a *Actuator) BuyGTorpsAndDetonators(ctx context.Context) {
 	a.Send("qqq")
 }
 
+func (a *Actuator) GetGameConfig(ctx context.Context) error {
+	a.Send("v")
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-a.Broker.WaitFor(ctx, events.CONFIGDISPLAY, ""):
+	}
+	return nil
+}
+
 func (a *Actuator) GoToSD(ctx context.Context) error {
 	// get stardock port if we don't already have it
 	if a.Data.Status.StarDock == 0 {
-		a.Send("v")
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-a.Broker.WaitFor(ctx, events.CONFIGDISPLAY, ""):
+		err := a.GetGameConfig(ctx)
+		if err != nil {
+			return err
 		}
 	}
 

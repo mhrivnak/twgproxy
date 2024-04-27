@@ -40,6 +40,14 @@ func (w *wsst) portCanBeUsed(ctx context.Context, sector *persist.Sector) bool {
 	if sector.Equ == string(models.BUYING) {
 		fmt.Printf("considering port %d\n", sector.ID)
 
+		// don't use FedSpace
+		if int(sector.ID) == w.actuator.Data.Status.StarDock {
+			return false
+		}
+		if sector.ID <= 10 {
+			return false
+		}
+
 		// any report within the last 2 minutes is recent enough
 		report, err := w.actuator.GetPortReport(ctx, int(sector.ID), time.Minute*2)
 		if err != nil {
@@ -94,6 +102,13 @@ func (w *wsst) run(ctx context.Context) {
 	defer close(w.done)
 
 	w.actuator.QuickStats(ctx)
+	if w.actuator.Data.Status.StarDock == 0 {
+		err := w.actuator.GetGameConfig(ctx)
+		if err != nil {
+			fmt.Println("error getting game config")
+			return
+		}
+	}
 
 	// figure out where the ships are and get them to the same sector
 	currentSectorID := w.actuator.Data.Status.Sector
