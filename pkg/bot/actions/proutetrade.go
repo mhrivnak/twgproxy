@@ -154,7 +154,7 @@ func (p *pRouteTrade) run(ctx context.Context) {
 				return
 			}
 
-			p.actuator.MombotPlanetSell(ctx, models.ORG)
+			p.actuator.MombotPlanetSell(ctx, models.PRODUCTORG)
 
 			// lift off from planet
 			p.actuator.Send("q")

@@ -29,11 +29,11 @@ type PlanetCorpSummary struct {
 
 func (p *Planet) ProductQuantity(product ProductType) int {
 	switch product {
-	case FUEL:
+	case PRODUCTFUEL:
 		return p.Ore
-	case ORG:
+	case PRODUCTORG:
 		return p.Org
-	case EQU:
+	case PRODUCTEQU:
 		return p.Equ
 	}
 	return -1
@@ -41,11 +41,11 @@ func (p *Planet) ProductQuantity(product ProductType) int {
 
 func (p *Planet) ProductMax(product ProductType) int {
 	switch product {
-	case FUEL:
+	case PRODUCTFUEL:
 		return p.OreMax
-	case ORG:
+	case PRODUCTORG:
 		return p.OrgMax
-	case EQU:
+	case PRODUCTEQU:
 		return p.EquMax
 	}
 	return -1

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
+	"github.com/mhrivnak/twgproxy/pkg/models"
 )
 
 // explore moves to the starting sector then each sector number sequentially
@@ -40,7 +41,7 @@ func (p *explore) run(ctx context.Context) {
 			EnemyFigsMax:    100,
 			EnemyMinesMax:   50,
 			RefurbAndReturn: true,
-			BuyFuel:         true,
+			BuyProduct:      models.PRODUCTFUEL,
 		}
 		err := p.actuator.Move(ctx, i, opts, false)
 		if err != nil {

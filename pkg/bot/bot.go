@@ -760,11 +760,11 @@ func (b *Bot) checkForPrompt(line string) {
 
 		switch parts[1] {
 		case "Fuel Ore":
-			e.Data = string(models.FUEL)
+			e.Data = string(models.PRODUCTFUEL)
 		case "Organics":
-			e.Data = string(models.ORG)
+			e.Data = string(models.PRODUCTORG)
 		case "Equipment":
-			e.Data = string(models.EQU)
+			e.Data = string(models.PRODUCTEQU)
 		default:
 			fmt.Printf("unknown buy/sell prompt product: %s\n", parts[1])
 			return

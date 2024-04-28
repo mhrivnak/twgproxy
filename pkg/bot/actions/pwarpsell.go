@@ -73,9 +73,9 @@ func (p *pWarpSell) run(ctx context.Context) {
 		case <-p.actuator.Broker.WaitFor(ctx, events.PLANETWARPCOMPLETE, ""):
 		}
 
-		p.actuator.MombotPlanetSell(ctx, models.ORG)
+		p.actuator.MombotPlanetSell(ctx, models.PRODUCTORG)
 		org -= 32760
-		p.actuator.MombotPlanetSell(ctx, models.EQU)
+		p.actuator.MombotPlanetSell(ctx, models.PRODUCTEQU)
 		equ -= 32760
 	}
 }

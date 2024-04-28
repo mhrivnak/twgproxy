@@ -65,6 +65,18 @@ type PortItemStatus string
 const BUYING PortItemStatus = "buying"
 const SELLING PortItemStatus = "selling"
 
+func (pr *PortReport) ItemFromType(pt ProductType) PortItem {
+	switch pt {
+	case PRODUCTFUEL:
+		return pr.Fuel
+	case PRODUCTORG:
+		return pr.Org
+	case PRODUCTEQU:
+		return pr.Equ
+	}
+	return PortItem{}
+}
+
 type Trader struct {
 	Name     string
 	ShipType ShipType

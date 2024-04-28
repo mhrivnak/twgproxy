@@ -119,8 +119,9 @@ func (w *wsst) run(ctx context.Context) {
 
 	w.updateOtherShipSector(ctx)
 
+	mo := w.genMoveOptions().WithBuy(models.PRODUCTEQU)
 	if w.shipCurrent.sector != w.shipOther.sector {
-		err := w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions(), false)
+		err := w.actuator.Move(ctx, w.shipOther.sector, mo, false)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
@@ -210,7 +211,9 @@ func (w *wsst) run(ctx context.Context) {
 				w.shipOther.sector = e.DataInt
 			}
 
-			err = w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions(), false)
+			mo := w.genMoveOptions().WithBuy(models.PRODUCTEQU)
+
+			err = w.actuator.Move(ctx, w.shipOther.sector, mo, false)
 			if err != nil {
 				fmt.Printf("stopping WSST: %s\n", err.Error())
 				return
@@ -402,7 +405,7 @@ func (w *wsst) getSectorWithVisit(ctx context.Context, sectorID int) (*persist.S
 		return sector, nil
 	}
 	// visit the sector, holo-scan
-	err := w.actuator.Move(ctx, sectorID, w.genMoveOptions(), false)
+	err := w.actuator.Move(ctx, sectorID, w.genMoveOptions().WithBuy(models.PRODUCTEQU), false)
 	if err != nil {
 		return nil, err
 	}
@@ -495,7 +498,7 @@ OUTER:
 				// explore
 				for _, uc := range cUnexplored {
 					fmt.Printf("moving to unexplored sector %d\n", uc)
-					err = w.actuator.Move(ctx, uc, w.genMoveOptions(), false)
+					err = w.actuator.Move(ctx, uc, w.genMoveOptions().WithBuy(models.PRODUCTEQU), false)
 					if err != nil {
 						return err
 					}

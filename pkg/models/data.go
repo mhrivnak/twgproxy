@@ -112,6 +112,10 @@ type Status struct {
 	StarDock  int
 }
 
+func (s *Status) EmptyHolds() int {
+	return s.Holds - s.Fuel - s.Org - s.Equ
+}
+
 type Persist struct {
 	SectorCache *persist.SectorCache
 	WarpCache   *persist.WarpCache
