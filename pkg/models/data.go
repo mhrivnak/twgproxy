@@ -94,22 +94,23 @@ func NewData(db *gorm.DB) *Data {
 }
 
 type Status struct {
-	Creds     int
-	Exp       int
-	Alignment int
-	Figs      int
-	Holds     int
-	Fuel      int
-	Org       int
-	Equ       int
-	Sector    int
-	Ship      int
-	Shields   int
-	GTorps    int
-	AtmDts    int
-	LRS       LRSType
-	TWarp     TWarpType
-	StarDock  int
+	Creds      int
+	Exp        int
+	Alignment  int
+	Figs       int
+	Holds      int
+	Fuel       int
+	Org        int
+	Equ        int
+	Sector     int
+	Ship       int
+	Shields    int
+	GTorps     int
+	AtmDts     int
+	Disruptors int
+	LRS        LRSType
+	TWarp      TWarpType
+	StarDock   int
 }
 
 func (s *Status) EmptyHolds() int {

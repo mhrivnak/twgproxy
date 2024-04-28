@@ -58,6 +58,8 @@ var figsToBuy *regexp.Regexp = regexp.MustCompile(`^B  Fighters +: +[0-9]+ credi
 var shieldsToBuy *regexp.Regexp = regexp.MustCompile(`^C  Shield Points +: +[0-9]+ credits per point +([0-9]+)`)
 var figsDestroyed *regexp.Regexp = regexp.MustCompile(`([0-9]+) K3-A Fighters destroyed by the attack!`)
 var youHaveCreds *regexp.Regexp = regexp.MustCompile(`You have ([0-9,]+) credits and [0-9]+ empty cargo holds.`)
+var minesAllDestroyed *regexp.Regexp = regexp.MustCompile(`You destroyed all ([0-9]+) of the mines in sector`)
+var minesDestroyed *regexp.Regexp = regexp.MustCompile(`You destroyed ([0-9]+) of the mines in sector [0-9]+! \(([0-9]+) remain\)`)
 
 func byteChan(r io.Reader) <-chan byte {
 	c := make(chan byte)
@@ -258,6 +260,15 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 	case byte('a'):
 		if len(command) > 1 {
 			switch command[1] {
+			case byte('d'):
+				sector, err := strconv.Atoi(string(command[2:]))
+				if err != nil {
+					fmt.Printf("failed to parse sector: %s", err.Error())
+					return nil
+				}
+				return actions.WrapErr(func(ctx context.Context) error {
+					return b.Actuator.DisruptMines(ctx, sector)
+				})
 			case byte('r'):
 				return actions.WrapErr(b.Actuator.Refurb)
 			case byte('u'):
@@ -687,6 +698,26 @@ func (b *Bot) ParseLine(line string) string {
 			b.Broker.Publish(&events.Event{
 				Kind:    events.YOUHAVECREDS,
 				DataInt: creds,
+			})
+		}
+	case strings.HasPrefix(clean, "You destroyed all"):
+		parts := minesAllDestroyed.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			b.Broker.Publish(&events.Event{
+				Kind: events.MINESALLDESTROYED,
+			})
+		}
+	case strings.HasPrefix(clean, "You destroyed "):
+		parts := minesDestroyed.FindStringSubmatch(clean)
+		if len(parts) == 3 {
+			remaining, err := strconv.Atoi(parts[2])
+			if err != nil {
+				fmt.Printf("failed to parse mines remaining: %s\n", err)
+				return ""
+			}
+			b.Broker.Publish(&events.Event{
+				Kind:    events.MINESDESTROYED,
+				DataInt: remaining,
 			})
 		}
 	}

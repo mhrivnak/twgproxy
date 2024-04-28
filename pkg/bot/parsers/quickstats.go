@@ -136,6 +136,12 @@ func (p *ParseQuickStats) finalize() {
 				fmt.Println("error parsing atmdts")
 			}
 			p.data.Status.AtmDts = atmdt
+		case "MDis":
+			mdis, err := strconv.Atoi(removeCommas(parts[2]))
+			if err != nil {
+				fmt.Println("error parsing MDis")
+			}
+			p.data.Status.Disruptors = mdis
 		case "LRS":
 			switch parts[2] {
 			case "None":

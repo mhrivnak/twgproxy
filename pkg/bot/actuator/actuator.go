@@ -874,6 +874,31 @@ func (a *Actuator) Refurb(ctx context.Context) error {
 	return nil
 }
 
+func (a *Actuator) DisruptMines(ctx context.Context, sector int) error {
+	a.QuickStats(ctx)
+
+	// enter computer menu
+	a.Send("c")
+
+L:
+	for i := 0; i < a.Data.Status.Disruptors; i++ {
+		a.Sendf("wy%d\r", sector)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-a.Broker.WaitFor(ctx, events.MINESDESTROYED, ""):
+			continue
+		case <-a.Broker.WaitFor(ctx, events.MINESALLDESTROYED, ""):
+			break L
+		}
+	}
+	// exit computer menu
+	a.Send("q")
+	// update the number of disruptors
+	a.QuickStats(ctx)
+	return nil
+}
+
 func parseSectors(route string) ([]int, error) {
 	parts := strings.Split(route, " > ")
 	sectors := make([]int, len(parts))
