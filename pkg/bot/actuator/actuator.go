@@ -426,6 +426,18 @@ func (a *Actuator) LandNewest(ctx context.Context) error {
 	return nil
 }
 
+func (a *Actuator) BustPlanets(ctx context.Context, neededExp int) error {
+	for e := 0; e < neededExp; e += 75 {
+		a.Send("psha1\rt1\rqquyx\rc")
+		err := a.LandNewest(ctx)
+		if err != nil {
+			return err
+		}
+		a.Send("zdy")
+	}
+	return nil
+}
+
 func (a *Actuator) Rob(ctx context.Context) {
 	a.Send("d/pr\rr")
 

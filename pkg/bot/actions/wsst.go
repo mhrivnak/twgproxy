@@ -211,9 +211,14 @@ func (w *wsst) run(ctx context.Context) {
 				w.shipOther.sector = e.DataInt
 			}
 
-			mo := w.genMoveOptions().WithBuy(models.PRODUCTEQU)
+			// if exp isn't enough to rob all the holds, bust planets
+			expShortfall := 30*w.actuator.Data.Status.Holds - w.actuator.Data.Status.Exp
+			if expShortfall > 0 {
+				w.actuator.GoToSD(ctx)
+				w.actuator.BustPlanets(ctx, expShortfall)
+			}
 
-			err = w.actuator.Move(ctx, w.shipOther.sector, mo, false)
+			err = w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions(), false)
 			if err != nil {
 				fmt.Printf("stopping WSST: %s\n", err.Error())
 				return
