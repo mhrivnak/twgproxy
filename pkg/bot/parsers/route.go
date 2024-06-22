@@ -42,6 +42,6 @@ func (p *parseRoute) finalize() {
 		Kind: events.ROUTEDISPLAY,
 		Data: route,
 		// create a key so async waiters can get the correct route
-		ID: fmt.Sprintf("%s:%s", sectors[0], sectors[len(sectors)-1]),
+		ID: fmt.Sprintf("%s:%s", sectors[0], strings.Trim(sectors[len(sectors)-1], "()")),
 	})
 }
