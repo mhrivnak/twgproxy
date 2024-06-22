@@ -17,6 +17,7 @@ type wsst struct {
 	done        chan struct{}
 	shipCurrent *ship
 	shipOther   *ship
+	xportRange  int
 }
 
 func NewWSST(a *actuator.Actuator, shipOther int) Action {
@@ -92,7 +93,7 @@ func (w *wsst) updateOtherShipSector(ctx context.Context) {
 func (w *wsst) genMoveOptions() actuator.MoveOptions {
 	return actuator.MoveOptions{
 		DropFigs:     1,
-		EnemyFigsMax: (w.actuator.Data.Status.Figs + w.actuator.Data.Status.Shields) / 3,
+		EnemyFigsMax: (w.actuator.Data.Status.Figs + w.actuator.Data.Status.Shields) / 4,
 		MinFigs:      100,
 		AutoAvoid:    true,
 	}
@@ -118,6 +119,9 @@ func (w *wsst) run(ctx context.Context) {
 	}
 
 	w.updateOtherShipSector(ctx)
+
+	// set the xport range
+	w.xportRange = w.actuator.CurrentXportRange(ctx)
 
 	// if exp isn't enough to rob all the holds, bust planets at SD first
 	expShortfall := 30*w.actuator.Data.Status.Holds - w.actuator.Data.Status.Exp
@@ -485,7 +489,7 @@ OUTER:
 		// holo-scan
 		w.actuator.Send("sh")
 
-		candidates, unexplored := w.findXXBs(ctx, start, 5, []int{})
+		candidates, unexplored := w.findXXBs(ctx, start, w.xportRange, []int{})
 
 		for _, candidate := range candidates {
 			sector, err := w.getSectorWithVisit(ctx, candidate)
@@ -495,7 +499,7 @@ OUTER:
 			if w.portCanBeUsed(ctx, sector) {
 				fmt.Printf("found suitable portA: %d\n", sector.ID)
 				// look for a companion
-				companions, cUnexplored := w.findXXBs(ctx, candidate, 5, []int{int(sector.ID)})
+				companions, cUnexplored := w.findXXBs(ctx, candidate, w.xportRange, []int{int(sector.ID)})
 				fmt.Printf("%d potential companions\n", len(companions))
 				for _, companion := range companions {
 					fmt.Printf("considering companion %d\n", companion)
@@ -503,7 +507,7 @@ OUTER:
 					if err != nil {
 						return err
 					}
-					if w.portCanBeUsed(ctx, cSector) && w.checkDistance(ctx, 5, candidate, companion) {
+					if w.portCanBeUsed(ctx, cSector) && w.checkDistance(ctx, w.xportRange, candidate, companion) {
 						fmt.Printf("found a pair: %d, %d\n", candidate, companion)
 
 						return w.moveShipsIntoPosition(ctx, candidate, companion)
@@ -521,7 +525,7 @@ OUTER:
 						fmt.Println("cound not get current sector from cache")
 						continue
 					}
-					if w.portCanBeUsed(ctx, cSector) && w.checkDistance(ctx, 5, candidate, uc) {
+					if w.portCanBeUsed(ctx, cSector) && w.checkDistance(ctx, w.xportRange, candidate, uc) {
 						return w.moveShipsIntoPosition(ctx, candidate, uc)
 					}
 
