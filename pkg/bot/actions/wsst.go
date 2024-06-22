@@ -79,7 +79,7 @@ func (w *wsst) portCanBeUsed(ctx context.Context, sector *persist.Sector) bool {
 }
 
 func (w *wsst) updateOtherShipSector(ctx context.Context) {
-	w.actuator.Send("xq")
+	w.actuator.Send("x\r\r")
 	// wait for the parser
 	select {
 	case <-ctx.Done():
@@ -227,7 +227,7 @@ func (w *wsst) run(ctx context.Context) {
 				w.actuator.BustPlanets(ctx, expShortfall)
 			}
 
-			err = w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions(), false)
+			err = w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions().WithBuy(models.PRODUCTEQU), false)
 			if err != nil {
 				fmt.Printf("stopping WSST: %s\n", err.Error())
 				return
