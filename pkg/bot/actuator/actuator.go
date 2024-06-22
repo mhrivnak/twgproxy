@@ -184,7 +184,8 @@ func (a *Actuator) CurrentXportRange(ctx context.Context) int {
 	}
 
 	// get the current xport range
-	a.Send("xq")
+	// sending two enters works in fed space and elsewhere
+	a.Send("x\r\r")
 	select {
 	case <-ctx.Done():
 		return 0
