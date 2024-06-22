@@ -418,7 +418,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 				return nil
 			}
 			return actions.WrapErr(func(ctx context.Context) error {
-				return b.Actuator.MoveWith(ctx, dest, otherShipID, opts)
+				return b.Actuator.MoveWith(ctx, dest, otherShipID, opts, nil)
 			})
 		}
 		dest, err := strconv.Atoi(string(command[1:]))

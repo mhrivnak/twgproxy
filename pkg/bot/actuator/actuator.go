@@ -216,8 +216,9 @@ func (a *Actuator) Transport(ctx context.Context, shipID int) error {
 // dest: The destination sector to move to.
 // otherShipID: The ID of the ship to bring along.
 // opts: The MoveOptions to use.
+// otherOpts: optional MoveOptions to use for the other ship.
 // Returns an error if the move operation fails.
-func (a *Actuator) MoveWith(ctx context.Context, dest, otherShipID int, opts MoveOptions) error {
+func (a *Actuator) MoveWith(ctx context.Context, dest, otherShipID int, opts MoveOptions, otherOpts *MoveOptions) error {
 	a.QuickStats(ctx)
 	primaryShipID := a.Data.Status.Ship
 	primaryRange := a.CurrentXportRange(ctx)
@@ -256,7 +257,11 @@ func (a *Actuator) MoveWith(ctx context.Context, dest, otherShipID int, opts Mov
 		}
 
 		a.Transport(ctx, otherShipID)
-		a.Sendf("%d\re", sectors[i+next])
+		if otherOpts == nil {
+			a.Sendf("%d\re", sectors[i+next])
+		} else {
+			a.Move(ctx, sectors[i+next], *otherOpts, false)
+		}
 		a.Transport(ctx, primaryShipID)
 		i += next
 	}
