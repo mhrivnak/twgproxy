@@ -119,6 +119,14 @@ func (w *wsst) run(ctx context.Context) {
 
 	w.updateOtherShipSector(ctx)
 
+	// if exp isn't enough to rob all the holds, bust planets at SD first
+	expShortfall := 30*w.actuator.Data.Status.Holds - w.actuator.Data.Status.Exp
+	if expShortfall > 0 {
+		fmt.Printf("need %d exp\n", expShortfall)
+		w.actuator.GoToSD(ctx)
+		w.actuator.BustPlanets(ctx, expShortfall)
+	}
+
 	mo := w.genMoveOptions().WithBuy(models.PRODUCTEQU)
 	if w.shipCurrent.sector != w.shipOther.sector {
 		err := w.actuator.Move(ctx, w.shipOther.sector, mo, false)
@@ -202,7 +210,7 @@ func (w *wsst) run(ctx context.Context) {
 				}
 			}
 
-			w.actuator.Send("qx\rq")
+			w.actuator.Send("q/x\rq")
 			// wait for the parser
 			select {
 			case <-ctx.Done():
@@ -214,6 +222,7 @@ func (w *wsst) run(ctx context.Context) {
 			// if exp isn't enough to rob all the holds, bust planets
 			expShortfall := 30*w.actuator.Data.Status.Holds - w.actuator.Data.Status.Exp
 			if expShortfall > 0 {
+				fmt.Printf("need %d exp\n", expShortfall)
 				w.actuator.GoToSD(ctx)
 				w.actuator.BustPlanets(ctx, expShortfall)
 			}

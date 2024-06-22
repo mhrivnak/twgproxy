@@ -1,6 +1,7 @@
 package parsers
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
@@ -36,8 +37,11 @@ func (p *parseRoute) Done() bool {
 func (p *parseRoute) finalize() {
 	rLines := p.lines[1 : len(p.lines)-1]
 	route := strings.Join(rLines, " ")
+	sectors := strings.Split(route, " ")
 	p.broker.Publish(&events.Event{
 		Kind: events.ROUTEDISPLAY,
 		Data: route,
+		// create a key so async waiters can get the correct route
+		ID: fmt.Sprintf("%s:%s", sectors[0], sectors[len(sectors)-1]),
 	})
 }

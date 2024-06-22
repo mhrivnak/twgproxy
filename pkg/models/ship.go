@@ -1,6 +1,7 @@
 package models
 
 type Ship struct {
-	ID     int
-	Sector int
+	ID         int
+	Sector     int
+	XportRange int
 }

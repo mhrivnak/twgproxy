@@ -125,11 +125,13 @@ func (a *Actuator) RouteFromTo(ctx context.Context, from, to int) ([]int, error)
 	// send commands
 	a.Send(fmt.Sprintf("cf%d\r%d\rq", from, to))
 
+	key := fmt.Sprintf("%d:%d", from, to)
+
 	// wait for events
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case e := <-a.Broker.WaitFor(ctx, events.ROUTEDISPLAY, ""):
+	case e := <-a.Broker.WaitFor(ctx, events.ROUTEDISPLAY, key):
 		fmt.Printf("got route: %s\n", e.Data)
 		return parseSectors(e.Data)
 	}
@@ -173,6 +175,120 @@ func (m MoveOptions) WithBuy(product models.ProductType) MoveOptions {
 
 func (a *Actuator) MoveSafe(ctx context.Context, dest int, block bool) error {
 	return a.Move(ctx, dest, MoveOptions{}, block)
+}
+
+func (a *Actuator) CurrentXportRange(ctx context.Context) int {
+	ship, ok := a.Data.GetShip(a.Data.Status.Ship)
+	if ok && ship.XportRange > 0 {
+		return ship.XportRange
+	}
+
+	// get the current xport range
+	a.Send("xq")
+	select {
+	case <-ctx.Done():
+		return 0
+	case e := <-a.Broker.WaitFor(ctx, events.XPORTRANGE, ""):
+		return e.DataInt
+	}
+}
+
+func (a *Actuator) Transport(ctx context.Context, shipID int) error {
+	sector, ok := a.Data.GetSector(a.Data.Status.Sector)
+	if !ok {
+		return fmt.Errorf("current sector %d not found in cache", a.Data.Status.Sector)
+	}
+	if sector.IsFedSpace {
+		// when in fed space, you get a warning that must be dismissed with an
+		// extra press of ENTER
+		a.Sendf("x\r%d\rq", shipID)
+		return nil
+	}
+	a.Sendf("x%d\rq", shipID)
+	return nil
+}
+
+// MoveWith moves the primary ship to the destination sector while periodically
+// transporting back and express-warping the other ship to catch up.
+//
+// ctx: The context.Context object for the operation.
+// dest: The destination sector to move to.
+// otherShipID: The ID of the ship to bring along.
+// opts: The MoveOptions to use.
+// Returns an error if the move operation fails.
+func (a *Actuator) MoveWith(ctx context.Context, dest, otherShipID int, opts MoveOptions) error {
+	a.QuickStats(ctx)
+	primaryShipID := a.Data.Status.Ship
+	primaryRange := a.CurrentXportRange(ctx)
+
+	sectors, err := a.RouteTo(ctx, dest)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+
+	for i := 0; i < len(sectors)-1; {
+		next, err := a.NextMoveByTransportRange(ctx, primaryRange, sectors[i:])
+		if err != nil {
+			return err
+		}
+		// 1-way warp that's too far to transport back, so must tow and go
+		// through together
+		if next == 0 {
+			fmt.Println("towing for the next move")
+			a.Sendf("wn%d\r", otherShipID)
+
+			err = a.Move(ctx, sectors[i+1], opts, false)
+			if err != nil {
+				return err
+			}
+			// disengage tow
+			a.Send("w")
+
+			i += 1
+			continue
+		}
+
+		err = a.Move(ctx, sectors[i+next], opts, false)
+		if err != nil {
+			return err
+		}
+
+		a.Transport(ctx, otherShipID)
+		a.Sendf("%d\re", sectors[i+next])
+		a.Transport(ctx, primaryShipID)
+		i += next
+	}
+
+	return nil
+}
+
+// NextMoveByTransportRange finds the next move based on the transport range being used to
+// get back to the other ship.
+//
+// ctx: the context for the function
+// xportRange: the transport range
+// sectors: the list of sectors to consider
+// Returns the index of the next sector to move to and any error encountered. If 0, there is no move
+func (a *Actuator) NextMoveByTransportRange(ctx context.Context, xportRange int, sectors []int) (int, error) {
+	start := sectors[0]
+	farthest := xportRange
+	if len(sectors)-1 < xportRange {
+		farthest = len(sectors) - 1
+	}
+
+	for i := farthest; i > 0; i-- {
+		sector := sectors[i]
+		route, err := a.RouteFromTo(ctx, sector, start)
+		if err != nil {
+			return 0, err
+		}
+		if len(route)-1 <= xportRange {
+			return i, nil
+		}
+	}
+	fmt.Println("no move found; must tow!")
+	return 0, nil
 }
 
 func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block bool) error {

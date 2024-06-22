@@ -394,6 +394,33 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 			}
 			return actions.NewMove(dest, opts, b.Actuator)
 		}
+		if len(command) > 1 && command[1] == byte('w') {
+			opts := actuator.MoveOptions{
+				DropFigs:      1,
+				MinFigs:       5000,
+				EnemyFigsMax:  1000,
+				EnemyMinesMax: 50,
+			}
+			args := strings.Split(string(command[2:]), ",")
+			if len(args) != 2 {
+				fmt.Printf("failed to parse args from command %s\n", string(command))
+				return nil
+			}
+
+			otherShipID, err := strconv.Atoi(args[0])
+			if err != nil {
+				fmt.Printf("failed to parse other ship ID from command %s\n", string(command))
+				return nil
+			}
+			dest, err := strconv.Atoi(args[1])
+			if err != nil {
+				fmt.Printf("failed to parse sector from command %s\n", string(command))
+				return nil
+			}
+			return actions.WrapErr(func(ctx context.Context) error {
+				return b.Actuator.MoveWith(ctx, dest, otherShipID, opts)
+			})
+		}
 		dest, err := strconv.Atoi(string(command[1:]))
 		if err != nil {
 			fmt.Printf("failed to parse sector from command %s\n", string(command))
@@ -619,7 +646,7 @@ func (b *Bot) ParseLine(line string) string {
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	case strings.Contains(clean, "HA!  You crack me up.  Now get lost."):
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
-	case strings.Contains(clean, "Available Ship Scan"):
+	case strings.Contains(clean, "<Transport to Ship>"):
 		b.parsers[parsers.AVAILABLESHIPS] = parsers.NewParseAvailableShipScan(b.Broker, b.data)
 	case strings.HasPrefix(clean, "You have never visited sector"):
 		b.Broker.Publish(&events.Event{Kind: events.NOTVISITEDSECTORMSG})

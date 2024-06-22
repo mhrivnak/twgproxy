@@ -51,6 +51,7 @@ const (
 	TWARPLOWFUEL          EventKind = "twarp not enough fuel"
 	TWXSCRIPTTERM         EventKind = "twx script terminated"
 	WARPSINTOSECTOR       EventKind = "warps into sector"
+	XPORTRANGE            EventKind = "xport range"
 	YOUHAVECREDS          EventKind = "you have creds"
 
 	CRIMESUCCESS CrimeResult = "crime success"
