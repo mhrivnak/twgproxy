@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/mhrivnak/twgproxy/pkg/bot/actions/sst"
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
@@ -166,14 +167,20 @@ func (w *wsst) run(ctx context.Context) {
 			return
 		}
 
-		busted, err := w.sst(ctx)
+		sstRun := sst.New(w.actuator, w.shipCurrent.ID, w.shipOther.ID)
+		err = sstRun.Run(ctx)
 
 		if err != nil {
 			fmt.Printf("error during SST: %s\n", err.Error())
 			return
 		}
 
-		if busted {
+		// update ship tracking in case we ended in the other one
+		if sstRun.ShipCurrent() != w.shipCurrent.ID {
+			w.shipCurrent, w.shipOther = w.shipOther, w.shipCurrent
+		}
+
+		if sstRun.Busted() {
 			err = w.actuator.Move(ctx, 1, w.genMoveOptions(), false)
 			if err != nil {
 				fmt.Printf("stopping WSST: %s\n", err.Error())
@@ -257,191 +264,6 @@ func (w *wsst) run(ctx context.Context) {
 	}
 }
 
-func (w *wsst) changeShips(ctx context.Context) error {
-	w.actuator.Sendf("x%d\rq", w.shipOther.ID)
-	w.shipCurrent, w.shipOther = w.shipOther, w.shipCurrent
-
-	// make sure the xport was successful
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-w.actuator.Broker.WaitFor(ctx, events.SHIPNOTAVAILABLE, ""):
-		return fmt.Errorf("ship not available for xport")
-	case <-w.actuator.Broker.WaitFor(ctx, events.AVAILABLESHIPS, fmt.Sprint(w.shipOther.ID)):
-	}
-
-	return nil
-}
-
-func (w *wsst) sst(ctx context.Context) (bool, error) {
-
-	for i := 0; ; i++ {
-		if i%5 == 0 {
-			// periodically update stats to track exp
-			w.actuator.Send("/")
-		} else if w.actuator.Data.Status.Exp < 35*w.actuator.Data.Status.Holds {
-			// except when exp is low, then track it more often
-			w.actuator.Send("/")
-		}
-
-		if i == 0 {
-			err := w.preparePort(ctx)
-			if err != nil {
-				return false, err
-			}
-		} else {
-			w.sell(ctx)
-		}
-
-		busted, err := w.steal(ctx)
-		if busted || err != nil {
-			fmt.Printf("SST done after %d rounds\n", i)
-			return busted, err
-		}
-
-		err = w.changeShips(ctx)
-		if err != nil {
-			return false, err
-		}
-
-		if i == 0 {
-			err := w.preparePort(ctx)
-			if err != nil {
-				return false, err
-			}
-		} else {
-			w.sell(ctx)
-		}
-
-		busted, err = w.steal(ctx)
-		if busted || err != nil {
-			fmt.Printf("SST done after %d rounds\n", i)
-			return busted, err
-		}
-
-		err = w.changeShips(ctx)
-		if err != nil {
-			return false, err
-		}
-	}
-}
-
-func (w *wsst) preparePort(ctx context.Context) error {
-	w.actuator.QuickStats(ctx)
-
-	if w.actuator.Data.Status.Equ > 0 {
-		err := w.sell(ctx)
-		if err != nil {
-			return err
-		}
-	}
-
-	// jettison anything else we have
-	w.actuator.Sendf("jy")
-	return nil
-}
-
-func (w *wsst) sell(ctx context.Context) error {
-	w.actuator.Send("pt")
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-w.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.SELLPROMPT):
-		// sell all
-		w.actuator.Send("\r")
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-w.actuator.Broker.WaitFor(ctx, events.PORTNOTINTERESTED, ""):
-		// TODO make sure we're not asked next to buy something else. For
-		// example, got a "not interested" response negotiating to buy fuel, but
-		// then get a prompt to buy org.
-		// try again
-		return w.sell(ctx)
-	case <-w.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.COMMANDPROMPT):
-		return nil
-	case <-w.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.BUYPROMPT):
-		// don't buy anything
-		sector, _ := w.actuator.Data.GetSector(w.actuator.Data.Status.Sector)
-		if sector.Port == nil || sector.Port.Report == nil {
-			return fmt.Errorf("unexpected nill port report")
-		}
-		if sector.Port.Report.Fuel.Status == models.SELLING {
-			w.actuator.Send("0\r")
-		}
-		if sector.Port.Report.Org.Status == models.SELLING {
-			w.actuator.Send("0\r")
-		}
-	}
-
-	return nil
-}
-
-func (w *wsst) steal(ctx context.Context) (bool, error) {
-	holds := w.actuator.Data.Status.Holds
-
-	holdsToSteal := min(holds, w.actuator.Data.Status.Exp/30)
-
-	w.actuator.Send("pr\rs3")
-
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	case e := <-w.actuator.Broker.WaitFor(ctx, events.PORTEQUTOSTEAL, ""):
-		available := e.DataInt
-		if available < holds {
-			upgrade := int((holds - available) / 10)
-			if (holds-available)%10 > 0 {
-				upgrade += 1
-			}
-			w.actuator.Sendf("0\ro3%d\rq", upgrade)
-			w.actuator.Send("pr\rs3")
-		}
-	}
-	w.actuator.Sendf("%d\r", holdsToSteal)
-
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	case <-w.actuator.Broker.WaitFor(ctx, events.STEALRESULT, string(events.CRIMESUCCESS)):
-		return false, nil
-	// sometimes this one gets obscured by a fig hit, so the next WaitFor
-	// ensures we notice either way.
-	case <-w.actuator.Broker.WaitFor(ctx, events.STEALRESULT, string(events.CRIMEBUSTED)):
-		return true, nil
-	case <-w.actuator.Broker.WaitFor(ctx, events.BUSTED, ""):
-		return true, nil
-	}
-}
-
-func (w *wsst) getSectorWithVisit(ctx context.Context, sectorID int) (*persist.Sector, error) {
-	sector, ok := w.actuator.Data.Persist.SectorCache.Get(sectorID)
-	if ok {
-		return sector, nil
-	}
-	// visit the sector, holo-scan
-	err := w.actuator.Move(ctx, sectorID, w.genMoveOptions().WithBuy(models.PRODUCTEQU), false)
-	if err != nil {
-		return nil, err
-	}
-	w.actuator.Send("sh")
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-w.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sectorID)):
-	}
-
-	sector, ok = w.actuator.Data.Persist.SectorCache.Get(sectorID)
-	if !ok {
-		return nil, fmt.Errorf("failed to get sector details even after visiting it")
-	}
-	return sector, nil
-}
-
 func (w *wsst) checkDistance(ctx context.Context, distance, sectorA, sectorB int) bool {
 	outbound, err := w.actuator.RouteFromTo(ctx, sectorA, sectorB)
 	if err != nil {
@@ -492,7 +314,7 @@ OUTER:
 		candidates, unexplored := w.findXXBs(ctx, start, w.xportRange, []int{})
 
 		for _, candidate := range candidates {
-			sector, err := w.getSectorWithVisit(ctx, candidate)
+			sector, err := w.actuator.GetSectorWithVisit(ctx, candidate, w.genMoveOptions().WithBuy(models.PRODUCTEQU))
 			if err != nil {
 				return err
 			}
@@ -503,7 +325,7 @@ OUTER:
 				fmt.Printf("%d potential companions\n", len(companions))
 				for _, companion := range companions {
 					fmt.Printf("considering companion %d\n", companion)
-					cSector, err := w.getSectorWithVisit(ctx, companion)
+					cSector, err := w.actuator.GetSectorWithVisit(ctx, companion, w.genMoveOptions().WithBuy(models.PRODUCTEQU))
 					if err != nil {
 						return err
 					}
@@ -549,10 +371,12 @@ OUTER:
 					if err != nil {
 						return err
 					}
-					err = w.changeShips(ctx)
+					err = w.actuator.Transport(ctx, w.shipOther.ID)
 					if err != nil {
 						return err
 					}
+					w.shipCurrent, w.shipOther = w.shipOther, w.shipCurrent
+
 					err = w.actuator.Move(ctx, u, w.genMoveOptions(), false)
 					if err != nil {
 						return err
@@ -629,10 +453,11 @@ func (w *wsst) moveShipsIntoPosition(ctx context.Context, a, b int) error {
 		return err
 	}
 	// switch ships
-	err = w.changeShips(ctx)
+	err = w.actuator.Transport(ctx, w.shipOther.ID)
 	if err != nil {
 		return err
 	}
+	w.shipCurrent, w.shipOther = w.shipOther, w.shipCurrent
 	err = w.actuator.Move(ctx, b, w.genMoveOptions(), false)
 	if err != nil {
 		return err
@@ -641,6 +466,15 @@ func (w *wsst) moveShipsIntoPosition(ctx context.Context, a, b int) error {
 	return nil
 }
 
+// findXXBs finds all sectors within a given distance of the starting sector that are
+// marked as "BUYING" in the sector cache and are not excluded. It returns the
+// sectors that meet the criteria and the sectors that were not explored.
+//
+// ctx: The context.Context object for the function.
+// start: The starting sector.
+// distance: The maximum distance from the starting sector to explore.
+// exclude: The sectors to exclude from the search.
+// []int, []int: The sectors that meet the criteria and the sectors that are unexplored.
 func (w *wsst) findXXBs(ctx context.Context, start, distance int, exclude []int) ([]int, []int) {
 	XXBs := []int{}
 	unexplored := []int{}

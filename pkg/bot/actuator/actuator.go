@@ -11,6 +11,7 @@ import (
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
+	"github.com/mhrivnak/twgproxy/pkg/models/persist"
 )
 
 func New(broker *events.Broker, data *models.Data, writer io.Writer) *Actuator {
@@ -206,6 +207,15 @@ func (a *Actuator) Transport(ctx context.Context, shipID int) error {
 		return nil
 	}
 	a.Sendf("x%d\rq", shipID)
+
+	// make sure the xport was successful
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-a.Broker.WaitFor(ctx, events.SHIPNOTAVAILABLE, ""):
+		return fmt.Errorf("ship not available for xport")
+	case <-a.Broker.WaitFor(ctx, events.AVAILABLESHIPS, fmt.Sprint(shipID)):
+	}
 	return nil
 }
 
@@ -1031,6 +1041,37 @@ L:
 	// update the number of disruptors
 	a.QuickStats(ctx)
 	return nil
+}
+
+// GetSectorWithVisit retrieves sector details with a visit and holo-scan if necessary
+//
+// ctx: context for the function
+// sectorID: ID of the sector to retrieve
+// moveOpts: options for moving to the sector
+// (*persist.Sector, error): returns the sector details or an error
+func (a *Actuator) GetSectorWithVisit(ctx context.Context, sectorID int, moveOpts MoveOptions) (*persist.Sector, error) {
+	sector, ok := a.Data.Persist.SectorCache.Get(sectorID)
+	if ok {
+		return sector, nil
+	}
+	// visit the sector, holo-scan
+	err := a.Move(ctx, sectorID, moveOpts, false)
+	if err != nil {
+		return nil, err
+	}
+	a.Send("sh")
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sectorID)):
+	}
+
+	sector, ok = a.Data.Persist.SectorCache.Get(sectorID)
+	if !ok {
+		return nil, fmt.Errorf("failed to get sector details even after visiting it")
+	}
+	return sector, nil
 }
 
 func parseSectors(route string) ([]int, error) {
