@@ -238,6 +238,29 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 		if string(command[:4]) == "wppt" {
 			return actions.NewWPPT(b.Actuator)
 		}
+		if string(command[:5]) == "wsste" {
+			ships := strings.Split(string(command[5:]), ",")
+			if len(ships) != 3 {
+				fmt.Printf("error parsing ships for wsste: %s", string(command[5:]))
+				return nil
+			}
+			traderCurrent, err := strconv.Atoi(ships[0])
+			if err != nil {
+				fmt.Printf("error parsing wsst ship: %s", err.Error())
+				return nil
+			}
+			escortOther, err := strconv.Atoi(ships[1])
+			if err != nil {
+				fmt.Printf("error parsing wsst ship: %s", err.Error())
+				return nil
+			}
+			traderOther, err := strconv.Atoi(ships[2])
+			if err != nil {
+				fmt.Printf("error parsing wsst ship: %s", err.Error())
+				return nil
+			}
+			return actions.NewWSSTE(b.Actuator, traderCurrent, escortOther, traderOther)
+		}
 		if string(command[:4]) == "wsst" {
 			shipID, err := strconv.Atoi(string(command[4:]))
 			if err != nil {

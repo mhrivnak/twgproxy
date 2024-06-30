@@ -189,6 +189,11 @@ func (p *ParseSector) finalize() {
 			}
 			parsingTradersIndex += 1
 		}
+		if strings.HasPrefix(line, "NavHaz  :") {
+			p.broker.Publish(&events.Event{
+				Kind: events.NAVHAZ,
+			})
+		}
 	}
 
 	p.data.SectorLock.Lock()

@@ -162,6 +162,7 @@ func (p *ParseQuickStats) finalize() {
 	}
 	p.broker.Publish(&events.Event{
 		Kind: events.QUICKSTATDISPLAY,
+		ID:   fmt.Sprint(p.data.Status.Ship),
 	})
 }
 

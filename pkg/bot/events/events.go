@@ -27,6 +27,7 @@ const (
 	MBOTTRADEDONE         EventKind = "MoM bot trade done"
 	MINESDESTROYED        EventKind = "mines destroyed"
 	MINESALLDESTROYED     EventKind = "mines all destroyed"
+	NAVHAZ                EventKind = "nav haz"
 	NOTVISITEDSECTORMSG   EventKind = "you have never visited sector"
 	PLANETCREATE          EventKind = "planet create"
 	PLANETDISPLAY         EventKind = "planet display"

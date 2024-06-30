@@ -42,7 +42,7 @@ func (s *SST) Run(ctx context.Context) error {
 			s.actuator.Send("/")
 		}
 
-		if i == 0 {
+		if i <= 1 {
 			err := s.preparePort(ctx)
 			if err != nil {
 				return err
@@ -120,39 +120,41 @@ func (s *SST) sell(ctx context.Context) error {
 	return nil
 }
 
-func (w *SST) steal(ctx context.Context) (bool, error) {
-	holds := w.actuator.Data.Status.Holds
+func (s *SST) steal(ctx context.Context) (bool, error) {
+	holds := s.actuator.Data.Status.Holds
 
-	holdsToSteal := min(holds, w.actuator.Data.Status.Exp/30)
+	holdsToSteal := min(holds, s.actuator.Data.Status.Exp/30)
 
-	w.actuator.Send("pr\rs3")
+	s.actuator.Send("pr\rs3")
 
 	select {
 	case <-ctx.Done():
 		return false, ctx.Err()
-	case e := <-w.actuator.Broker.WaitFor(ctx, events.PORTEQUTOSTEAL, ""):
+	case e := <-s.actuator.Broker.WaitFor(ctx, events.PORTEQUTOSTEAL, ""):
 		available := e.DataInt
+		// upgrade if necessary, when port regen means a bit of the equ we just
+		// sold is now gone
 		if available < holds {
 			upgrade := int((holds - available) / 10)
 			if (holds-available)%10 > 0 {
 				upgrade += 1
 			}
-			w.actuator.Sendf("0\ro3%d\rq", upgrade)
-			w.actuator.Send("pr\rs3")
+			s.actuator.Sendf("0\ro3%d\rq", upgrade)
+			s.actuator.Send("pr\rs3")
 		}
 	}
-	w.actuator.Sendf("%d\r", holdsToSteal)
+	s.actuator.Sendf("%d\r", holdsToSteal)
 
 	select {
 	case <-ctx.Done():
 		return false, ctx.Err()
-	case <-w.actuator.Broker.WaitFor(ctx, events.STEALRESULT, string(events.CRIMESUCCESS)):
+	case <-s.actuator.Broker.WaitFor(ctx, events.STEALRESULT, string(events.CRIMESUCCESS)):
 		return false, nil
 	// sometimes this one gets obscured by a fig hit, so the next WaitFor
 	// ensures we notice either way.
-	case <-w.actuator.Broker.WaitFor(ctx, events.STEALRESULT, string(events.CRIMEBUSTED)):
+	case <-s.actuator.Broker.WaitFor(ctx, events.STEALRESULT, string(events.CRIMEBUSTED)):
 		return true, nil
-	case <-w.actuator.Broker.WaitFor(ctx, events.BUSTED, ""):
+	case <-s.actuator.Broker.WaitFor(ctx, events.BUSTED, ""):
 		return true, nil
 	}
 }

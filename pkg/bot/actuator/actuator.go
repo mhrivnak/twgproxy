@@ -62,6 +62,16 @@ func (a *Actuator) QuickStats(ctx context.Context) {
 	}
 }
 
+func (a *Actuator) QuickStatsSync(ctx context.Context, shipID int) {
+	a.Send("/")
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-a.Broker.WaitFor(ctx, events.QUICKSTATDISPLAY, fmt.Sprint(shipID)):
+	}
+}
+
 func (a *Actuator) RouteWalk(ctx context.Context, points []int, task func()) {
 	a.QuickStats(ctx)
 
@@ -216,6 +226,8 @@ func (a *Actuator) Transport(ctx context.Context, shipID int) error {
 		return fmt.Errorf("ship not available for xport")
 	case <-a.Broker.WaitFor(ctx, events.AVAILABLESHIPS, fmt.Sprint(shipID)):
 	}
+
+	a.QuickStatsSync(ctx, shipID)
 	return nil
 }
 
@@ -229,9 +241,15 @@ func (a *Actuator) Transport(ctx context.Context, shipID int) error {
 // otherOpts: optional MoveOptions to use for the other ship.
 // Returns an error if the move operation fails.
 func (a *Actuator) MoveWith(ctx context.Context, dest, otherShipID int, opts MoveOptions, otherOpts *MoveOptions) error {
+	fmt.Println("######################## MOVE WITH #########################")
 	a.QuickStats(ctx)
 	primaryShipID := a.Data.Status.Ship
 	primaryRange := a.CurrentXportRange(ctx)
+
+	fmt.Printf("primary ship: %d\n", primaryShipID)
+	fmt.Printf("other ship: %d\n", otherShipID)
+	fmt.Printf("primary range: %d\n", primaryRange)
+	fmt.Printf("destination: %d\n", dest)
 
 	sectors, err := a.RouteTo(ctx, dest)
 	if err != nil {
@@ -267,10 +285,26 @@ func (a *Actuator) MoveWith(ctx context.Context, dest, otherShipID int, opts Mov
 		}
 
 		a.Transport(ctx, otherShipID)
+		destinationWait := a.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(sectors[i+next]))
 		if otherOpts == nil {
 			a.Sendf("%d\re", sectors[i+next])
 		} else {
 			a.Move(ctx, sectors[i+next], *otherOpts, false)
+		}
+
+		// wait until we arrive before transporting, so the "current sector"
+		// status is updated
+	OUTER:
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-destinationWait:
+				break OUTER
+			case <-a.Broker.WaitFor(ctx, events.NAVHAZ, ""):
+				// respond to the "stop in this sector?" prompt
+				a.Send("\r")
+			}
 		}
 		a.Transport(ctx, primaryShipID)
 		i += next
@@ -503,6 +537,8 @@ func (a *Actuator) BuyProduct(ctx context.Context, product models.ProductType, p
 	sellsBefore := 0
 	command := "pt"
 	for i := 0; i < product.Num()-1; i++ {
+		// TODO: If a port is selling a product but has 0, it won't present
+		// a prompt to buy it.
 		if portType[i] == 'S' {
 			command += "0\r"
 			sellsBefore += 1
@@ -1072,6 +1108,79 @@ func (a *Actuator) GetSectorWithVisit(ctx context.Context, sectorID int, moveOpt
 		return nil, fmt.Errorf("failed to get sector details even after visiting it")
 	}
 	return sector, nil
+}
+
+// findXXBs finds all sectors within a given distance of the starting sector that are
+// marked as "BUYING" in the sector cache and are not excluded. It returns the
+// sectors that meet the criteria and the sectors that were not explored.
+//
+// ctx: The context.Context object for the function.
+// start: The starting sector.
+// distance: The maximum distance from the starting sector to explore.
+// exclude: The sectors to exclude from the search.
+// []int, []int: The sectors that meet the criteria and the sectors that are unexplored.
+func (a *Actuator) FindXXBPair(ctx context.Context, start, distance int, exclude []int) ([]int, []int) {
+	XXBs := []int{}
+	unexplored := []int{}
+
+	checked := map[int]struct{}{}
+
+	toCheck := []int{start}
+
+	eMap := map[int]struct{}{}
+	for _, e := range exclude {
+		eMap[e] = struct{}{}
+	}
+
+	for i := 0; i < distance; i++ {
+		nextToCheck := []int{}
+		for _, sector := range toCheck {
+			fmt.Printf("checking sector %d\n", sector)
+			// mark this sector as checked
+			checked[sector] = struct{}{}
+
+			// check if this sector is a match
+			s, ok := a.Data.Persist.SectorCache.Get(sector)
+			if !ok {
+				fmt.Println("not in sectorcache")
+				unexplored = append(unexplored, sector)
+				continue
+			}
+			if s.Equ == persist.BUYING {
+				_, ok := eMap[sector]
+				if ok {
+					fmt.Println("excluded")
+				} else {
+					fmt.Println("adding")
+					XXBs = append(XXBs, sector)
+				}
+			}
+			// determine which neighbors to check next
+			warps, ok := a.Data.Persist.WarpCache.Get(sector)
+			if !ok {
+				// query warps and try again; maybe we've holo-scaned the
+				// sector, but not visited, and thus don't have warp data yet.
+				a.QueryWarps(ctx, sector, true)
+				warps, ok = a.Data.Persist.WarpCache.Get(sector)
+				if !ok {
+					unexplored = append(unexplored, sector)
+					continue
+				}
+
+			}
+			for _, warp := range warps {
+				_, alreadyChecked := checked[warp]
+				if alreadyChecked {
+					continue
+				}
+
+				nextToCheck = append(nextToCheck, warp)
+			}
+		}
+		toCheck = nextToCheck
+	}
+
+	return XXBs, unexplored
 }
 
 func parseSectors(route string) ([]int, error) {

@@ -3,14 +3,11 @@ package actions
 import (
 	"context"
 	"fmt"
-	"math/rand"
-	"time"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actions/sst"
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
-	"github.com/mhrivnak/twgproxy/pkg/models/persist"
 )
 
 type wsst struct {
@@ -35,49 +32,6 @@ func NewWSST(a *actuator.Actuator, shipOther int) Action {
 func (w *wsst) Start(ctx context.Context) <-chan struct{} {
 	go w.run(ctx)
 	return w.done
-}
-
-func (w *wsst) portCanBeUsed(ctx context.Context, sector *persist.Sector) bool {
-	// is this an xxB port?
-	if sector.Equ == string(models.BUYING) {
-		fmt.Printf("considering port %d\n", sector.ID)
-
-		// don't use FedSpace
-		if int(sector.ID) == w.actuator.Data.Status.StarDock {
-			return false
-		}
-		if sector.ID <= 10 {
-			return false
-		}
-
-		// any report within the last 2 minutes is recent enough
-		report, err := w.actuator.GetPortReport(ctx, int(sector.ID), time.Minute*2)
-		if err != nil {
-			fmt.Println(err.Error())
-			return false
-		}
-
-		// typically because enemy figs are in the sector
-		if report == nil {
-			return false
-		}
-
-		switch {
-		case report.Equ.Status != models.BUYING:
-			return false
-		case report.Equ.Percent < 80:
-			return false
-		case report.Equ.Trading > 10000:
-			return false
-		case report.Org.Trading > 10000:
-			return false
-		case sector.Busted != nil:
-			return false
-		}
-		return true
-	}
-
-	return false
 }
 
 func (w *wsst) updateOtherShipSector(ctx context.Context) {
@@ -161,11 +115,13 @@ func (w *wsst) run(ctx context.Context) {
 		case <-w.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(currentSectorID)):
 		}
 
-		err := w.findPorts(ctx)
+		err, sectA, sectB := sst.FindPorts(ctx, w.actuator, w.genMoveOptions(),
+			w.xportRange, w.shipCurrent.ID, w.shipOther.sector, w.moveShips)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
+		w.moveShipsIntoPosition(ctx, sectA, sectB)
 
 		sstRun := sst.New(w.actuator, w.shipCurrent.ID, w.shipOther.ID)
 		err = sstRun.Run(ctx)
@@ -187,41 +143,13 @@ func (w *wsst) run(ctx context.Context) {
 				return
 			}
 
-			w.actuator.Sendf("pta")
-
-			holdsChan := w.actuator.Broker.WaitFor(ctx, events.HOLDSTOBUY, "")
-			figsChan := w.actuator.Broker.WaitFor(ctx, events.FIGSTOBUY, "")
-			shieldsChan := w.actuator.Broker.WaitFor(ctx, events.SHIELDSTOBUY, "")
-
-			// buy holds
-			select {
-			case <-ctx.Done():
+			err = sst.Refurb(ctx, w.actuator)
+			if err != nil {
+				fmt.Printf("refurb error: %s\n", err.Error())
 				return
-			case e := <-holdsChan:
-				w.actuator.Sendf("%d\ry", e.DataInt)
 			}
 
-			// buy figs
-			select {
-			case <-ctx.Done():
-				return
-			case e := <-figsChan:
-				if e.DataInt > 0 {
-					w.actuator.Sendf("b%d\r", e.DataInt)
-				}
-			}
-
-			// buy shields
-			select {
-			case <-ctx.Done():
-				return
-			case e := <-shieldsChan:
-				if e.DataInt > 0 {
-					w.actuator.Sendf("c%d\r", e.DataInt)
-				}
-			}
-
-			w.actuator.Send("q/x\rq")
+			w.actuator.Send("x\rq")
 			// wait for the parser
 			select {
 			case <-ctx.Done():
@@ -264,189 +192,6 @@ func (w *wsst) run(ctx context.Context) {
 	}
 }
 
-func (w *wsst) checkDistance(ctx context.Context, distance, sectorA, sectorB int) bool {
-	outbound, err := w.actuator.RouteFromTo(ctx, sectorA, sectorB)
-	if err != nil {
-		return false
-	}
-	if len(outbound) >= distance {
-		return false
-	}
-
-	inbound, err := w.actuator.RouteFromTo(ctx, sectorB, sectorA)
-	if err != nil {
-		return false
-	}
-	// the route starts with the current sector, so even a 1-hop route will have
-	// two points
-	if len(inbound) > distance+1 {
-		return false
-	}
-
-	// make sure the current ship can go to sectorA and xport back to the other ship
-	// TODO make this smarter. Maybe move to sectorB first if it's closer rather than
-	// veto the pair.
-	if sectorA != w.shipOther.sector {
-		aToOtherShip, err := w.actuator.RouteFromTo(ctx, sectorA, w.shipOther.sector)
-		if err != nil {
-			return false
-		}
-		if len(aToOtherShip) > distance+1 {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (w *wsst) findPorts(ctx context.Context) error {
-	visited := map[int]struct{}{}
-
-OUTER:
-	for {
-		fmt.Println("####################### START FIND PORTS ITERATION ##########################")
-		start := w.actuator.Data.Status.Sector
-		visited[start] = struct{}{}
-
-		// holo-scan
-		w.actuator.Send("sh")
-
-		candidates, unexplored := w.findXXBs(ctx, start, w.xportRange, []int{})
-
-		for _, candidate := range candidates {
-			sector, err := w.actuator.GetSectorWithVisit(ctx, candidate, w.genMoveOptions().WithBuy(models.PRODUCTEQU))
-			if err != nil {
-				return err
-			}
-			if w.portCanBeUsed(ctx, sector) {
-				fmt.Printf("found suitable portA: %d\n", sector.ID)
-				// look for a companion
-				companions, cUnexplored := w.findXXBs(ctx, candidate, w.xportRange, []int{int(sector.ID)})
-				fmt.Printf("%d potential companions\n", len(companions))
-				for _, companion := range companions {
-					fmt.Printf("considering companion %d\n", companion)
-					cSector, err := w.actuator.GetSectorWithVisit(ctx, companion, w.genMoveOptions().WithBuy(models.PRODUCTEQU))
-					if err != nil {
-						return err
-					}
-					if w.portCanBeUsed(ctx, cSector) && w.checkDistance(ctx, w.xportRange, candidate, companion) {
-						fmt.Printf("found a pair: %d, %d\n", candidate, companion)
-
-						return w.moveShipsIntoPosition(ctx, candidate, companion)
-					}
-				}
-				// explore
-				for _, uc := range cUnexplored {
-					fmt.Printf("moving to unexplored sector %d\n", uc)
-					err = w.actuator.Move(ctx, uc, w.genMoveOptions().WithBuy(models.PRODUCTEQU), false)
-					if err != nil {
-						return err
-					}
-					cSector, ok := w.actuator.Data.Persist.SectorCache.Get(uc)
-					if !ok {
-						fmt.Println("cound not get current sector from cache")
-						continue
-					}
-					if w.portCanBeUsed(ctx, cSector) && w.checkDistance(ctx, w.xportRange, candidate, uc) {
-						return w.moveShipsIntoPosition(ctx, candidate, uc)
-					}
-
-				}
-				// out of companions to check. Try another primary candidate.
-				fmt.Printf("Giving up on primary candidate %d\n", sector.ID)
-			}
-
-		}
-		if len(unexplored) > 0 {
-			// move to a random unexplored sector and try again
-			rand.Seed(time.Now().UnixNano())
-			rand.Shuffle(len(unexplored), func(i, j int) { unexplored[i], unexplored[j] = unexplored[j], unexplored[i] })
-			for _, u := range unexplored {
-				returnRoute, err := w.actuator.RouteFromTo(ctx, u, w.shipCurrent.sector)
-				if err != nil {
-					return err
-				}
-				if len(returnRoute) <= 6 {
-					err = w.actuator.Move(ctx, u, w.genMoveOptions(), false)
-					if err != nil {
-						return err
-					}
-					err = w.actuator.Transport(ctx, w.shipOther.ID)
-					if err != nil {
-						return err
-					}
-					w.shipCurrent, w.shipOther = w.shipOther, w.shipCurrent
-
-					err = w.actuator.Move(ctx, u, w.genMoveOptions(), false)
-					if err != nil {
-						return err
-					}
-					continue OUTER
-				}
-			}
-		}
-
-		// in case we went exploring to get sector info
-		fmt.Println("moving back to the other ship to start towing it")
-		w.updateOtherShipSector(ctx)
-		err := w.actuator.Move(ctx, w.shipOther.sector, w.genMoveOptions(), false)
-		if err != nil {
-			return err
-		}
-
-		current, _ := w.actuator.Data.GetSector(w.actuator.Data.Status.Sector)
-		safeHops := []int{}
-		for _, warp := range current.Warps {
-			s, ok := w.actuator.Data.GetSector(warp)
-			if !ok {
-				fmt.Printf("cache miss getting sector %d for safe hops\n", warp)
-				continue
-			}
-			if s.IsSafe() {
-				safeHops = append(safeHops, warp)
-			}
-		}
-		if len(safeHops) == 0 {
-			fmt.Println("No safe moves available. Stopping.")
-			return fmt.Errorf("no safe moves")
-		}
-
-		unexplored = w.actuator.Data.Persist.WarpCache.TrimExplored(safeHops)
-
-		unvisited := []int{}
-		for _, warp := range safeHops {
-			_, ok := visited[warp]
-			if !ok {
-				unvisited = append(unvisited, warp)
-			}
-		}
-
-		fmt.Printf("of %d safe sectors: %d unexplored, %d unvisited\n", len(safeHops), len(unexplored), len(unvisited))
-
-		var next int
-		switch {
-		case len(unexplored) > 0:
-			// bias toward unexplored sectors
-			fmt.Println("picking a random unexplored sector")
-			next = unexplored[rand.Intn(len(unexplored))]
-		case len(unvisited) > 0:
-			// bias toward sectors not visited during this action
-			fmt.Println("picking a random unvisited sector")
-			next = unvisited[rand.Intn(len(unvisited))]
-		default:
-			next = safeHops[rand.Intn(len(safeHops))]
-			fmt.Println("picking a random sector")
-		}
-
-		w.actuator.Sendf("wn%d\r", w.shipOther.ID)
-		err = w.actuator.Move(ctx, next, w.genMoveOptions(), false)
-		if err != nil {
-			return err
-		}
-		w.actuator.Send("w")
-	}
-}
-
 func (w *wsst) moveShipsIntoPosition(ctx context.Context, a, b int) error {
 	err := w.actuator.Move(ctx, a, w.genMoveOptions(), false)
 	if err != nil {
@@ -466,78 +211,20 @@ func (w *wsst) moveShipsIntoPosition(ctx context.Context, a, b int) error {
 	return nil
 }
 
-// findXXBs finds all sectors within a given distance of the starting sector that are
-// marked as "BUYING" in the sector cache and are not excluded. It returns the
-// sectors that meet the criteria and the sectors that were not explored.
-//
-// ctx: The context.Context object for the function.
-// start: The starting sector.
-// distance: The maximum distance from the starting sector to explore.
-// exclude: The sectors to exclude from the search.
-// []int, []int: The sectors that meet the criteria and the sectors that are unexplored.
-func (w *wsst) findXXBs(ctx context.Context, start, distance int, exclude []int) ([]int, []int) {
-	XXBs := []int{}
-	unexplored := []int{}
-
-	checked := map[int]struct{}{}
-
-	toCheck := []int{start}
-
-	eMap := map[int]struct{}{}
-	for _, e := range exclude {
-		eMap[e] = struct{}{}
+func (w *wsst) moveShips(ctx context.Context, destination int) error {
+	w.actuator.QuickStats(ctx)
+	if w.shipCurrent.ID != w.actuator.Data.Status.Ship {
+		w.shipCurrent, w.shipOther = w.shipOther, w.shipCurrent
 	}
 
-	for i := 0; i < distance; i++ {
-		nextToCheck := []int{}
-		for _, sector := range toCheck {
-			fmt.Printf("checking sector %d\n", sector)
-			// mark this sector as checked
-			checked[sector] = struct{}{}
-
-			// check if this sector is a match
-			s, ok := w.actuator.Data.Persist.SectorCache.Get(sector)
-			if !ok {
-				fmt.Println("not in sectorcache")
-				unexplored = append(unexplored, sector)
-				continue
-			}
-			if s.Equ == persist.BUYING {
-				_, ok := eMap[sector]
-				if ok {
-					fmt.Println("excluded")
-				} else {
-					fmt.Println("adding")
-					XXBs = append(XXBs, sector)
-				}
-			}
-			// determine which neighbors to check next
-			warps, ok := w.actuator.Data.Persist.WarpCache.Get(sector)
-			if !ok {
-				// query warps and try again; maybe we've holo-scaned the
-				// sector, but not visited, and thus don't have warp data yet.
-				w.actuator.QueryWarps(ctx, sector, true)
-				warps, ok = w.actuator.Data.Persist.WarpCache.Get(sector)
-				if !ok {
-					unexplored = append(unexplored, sector)
-					continue
-				}
-
-			}
-			for _, warp := range warps {
-				_, alreadyChecked := checked[warp]
-				if alreadyChecked {
-					continue
-				}
-
-				nextToCheck = append(nextToCheck, warp)
-			}
-		}
-		toCheck = nextToCheck
-
+	w.actuator.Sendf("wn%d\r", w.shipOther.ID)
+	err := w.actuator.Move(ctx, destination, w.genMoveOptions(), false)
+	if err != nil {
+		return err
 	}
+	w.actuator.Send("w")
 
-	return XXBs, unexplored
+	return nil
 }
 
 type ship struct {
