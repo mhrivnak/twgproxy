@@ -301,8 +301,9 @@ func (a *Actuator) MoveWith(ctx context.Context, dest, otherShipID int, opts Mov
 				return ctx.Err()
 			case <-destinationWait:
 				break OUTER
-			case <-a.Broker.WaitFor(ctx, events.NAVHAZ, ""):
+			case <-a.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.STOPINSECTORPROMPT):
 				// respond to the "stop in this sector?" prompt
+				// this can be caused by navhaz or mines
 				a.Send("\r")
 			}
 		}
