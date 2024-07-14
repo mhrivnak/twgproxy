@@ -91,8 +91,11 @@ func (b *Bot) Start(userReader io.Reader, userWriter io.Writer, done chan<- inte
 	b.Broker.Subscribe(events.BUSTED, listeners.NewBustHandler(b.Actuator))
 	b.Broker.Subscribe(events.SECTORDISPLAY, listeners.NewSectorHandler(b.Actuator))
 
+	gameReaderDone := make(chan interface{})
+	userReaderDone := make(chan interface{})
+
 	go func() {
-		defer close(done)
+		defer close(gameReaderDone)
 
 		buf := bufio.NewReader(b.gameReader)
 		var err error
@@ -142,7 +145,7 @@ func (b *Bot) Start(userReader io.Reader, userWriter io.Writer, done chan<- inte
 	}()
 
 	go func() {
-		defer close(done)
+		defer close(userReaderDone)
 
 		// parse user input
 		input := byteChan(userReader)
@@ -197,6 +200,17 @@ func (b *Bot) Start(userReader io.Reader, userWriter io.Writer, done chan<- inte
 				}
 			}
 		}
+	}()
+
+	// wait for one of the above loops to end
+	go func() {
+		select {
+		case <-gameReaderDone:
+			fmt.Println("game reader stopped")
+		case <-userReaderDone:
+			fmt.Println("user reader stopped")
+		}
+		close(done)
 	}()
 }
 
