@@ -54,6 +54,51 @@ type PortReport struct {
 	Equ  PortItem
 }
 
+// what command to send after porting if you want to buy
+// a specific product type.
+func (pr *PortReport) BuyCommand(product ProductType) string {
+	var command string
+
+	switch product {
+	case PRODUCTFUEL:
+		if pr.Fuel.Status == SELLING && pr.Fuel.Trading > 0 {
+			command = "\r"
+		} else {
+			// this lets us escape back to the command prompt. Extra 0's have no
+			// impact.
+			command = "0\r0\r0\r"
+		}
+	case PRODUCTORG:
+		if pr.Fuel.Status == SELLING && pr.Fuel.Trading > 0 {
+			command += "0\r"
+		}
+		if pr.Org.Status == SELLING && pr.Org.Trading > 0 {
+			command += "\r"
+		} else {
+			// this lets us escape back to the command prompt. Extra 0's have no
+			// impact.
+			command = "0\r0\r0\r"
+
+		}
+	case PRODUCTEQU:
+		if pr.Fuel.Status == SELLING && pr.Fuel.Trading > 0 {
+			command += "0\r"
+		}
+		if pr.Org.Status == SELLING && pr.Org.Trading > 0 {
+			command += "0\r"
+		}
+		if pr.Equ.Status == SELLING && pr.Equ.Trading > 0 {
+			command += "\r"
+		} else {
+			// this lets us escape back to the command prompt. Extra 0's have no
+			// impact.
+			command = "0\r0\r0\r"
+		}
+	}
+
+	return command
+}
+
 type PortItem struct {
 	Status  PortItemStatus
 	Trading int

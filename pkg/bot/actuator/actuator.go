@@ -472,7 +472,7 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 					fmt.Printf("error getting port report: %s\n", err)
 				} else {
 					if report.ItemFromType(opts.BuyProduct).Trading > a.Data.Status.EmptyHolds() && persistedPort.Busted == nil {
-						a.BuyProduct(ctx, opts.BuyProduct, sInfo.Port.Type)
+						a.BuyProduct(ctx, opts.BuyProduct)
 						fmt.Println("done with call to buy product")
 						a.Send("/")
 					}
@@ -532,46 +532,53 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 	return nil
 }
 
-func (a *Actuator) BuyProduct(ctx context.Context, product models.ProductType, portType string) {
+func (a *Actuator) BuyProduct(ctx context.Context, product models.ProductType) {
 	fmt.Printf("buying %s\n", product)
+	waitForYouHaveCreds := a.Broker.WaitFor(ctx, events.YOUHAVECREDS, "")
 
-	sellsBefore := 0
-	command := "pt"
-	for i := 0; i < product.Num()-1; i++ {
-		// TODO: If a port is selling a product but has 0, it won't present
-		// a prompt to buy it.
-		if portType[i] == 'S' {
-			command += "0\r"
-			sellsBefore += 1
-		}
+	a.Send("pt")
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-a.Broker.WaitFor(ctx, events.PORTREPORTDISPLAY, fmt.Sprint(a.Data.Status.Sector)):
 	}
-	command += "\r"
-	a.Send(command)
 
 	// wait for the first statement with the port report
-	<-a.Broker.WaitFor(ctx, events.YOUHAVECREDS, "")
+	<-waitForYouHaveCreds
 
-	// each time the port offers to sell product, even if we decline, it will
-	// give the YOUHAVECREDS line. So we need to wait for all of those lines to
-	// know that this transaction is complete.
-	for i := 0; i <= sellsBefore; i++ {
-		fmt.Println("waiting for result of product purchase")
-		select {
-		case <-ctx.Done():
-			return
-		case <-a.Broker.WaitFor(ctx, events.PORTNOTINTERESTED, ""):
-			// try again
-			fmt.Println("product purchase did not go through; trying again.")
-			// send two "0" ammounts in case the port also sells other products. If
-			// not, these are harmless at the command prompt. Extra return
-			// ensures that the sector displays. That is how we know we are done
-			// with the prior port operation and can start a fresh attempt.
-			a.Send("0\r0\r\r")
-			<-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, "")
-			a.BuyProduct(ctx, product, portType)
-			return
-		case <-a.Broker.WaitFor(ctx, events.YOUHAVECREDS, ""):
-		}
+	report, ok := a.Data.GetPortReport(a.Data.Status.Sector)
+	if !ok {
+		fmt.Printf("failed to get port report for sector %d\n", a.Data.Status.Sector)
+		return
+	}
+
+	command := report.BuyCommand(product)
+	if command == "" {
+		// this lets us escape back to the command prompt. Extra 0's have no
+		// impact.
+		a.Send("0\r0\r0\r")
+		return
+	}
+
+	a.Send(command)
+
+	fmt.Println("waiting for result of product purchase")
+	select {
+	case <-ctx.Done():
+		return
+	case <-a.Broker.WaitFor(ctx, events.PORTNOTINTERESTED, ""):
+		// try again
+		fmt.Println("product purchase did not go through; trying again.")
+		// send two "0" ammounts in case the port also sells other products. If
+		// not, these are harmless at the command prompt. Extra return
+		// ensures that the sector displays. That is how we know we are done
+		// with the prior port operation and can start a fresh attempt.
+		a.Send("0\r0\r\r")
+		<-a.Broker.WaitFor(ctx, events.SECTORDISPLAY, "")
+		a.BuyProduct(ctx, product)
+		return
+	case <-a.Broker.WaitFor(ctx, events.PROMPTDISPLAY, string(events.COMMANDPROMPT)):
 	}
 	fmt.Println("product purchase was successful")
 }

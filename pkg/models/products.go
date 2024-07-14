@@ -34,3 +34,15 @@ func (t ProductType) Num() int {
 	}
 	return -1
 }
+
+func ProductTypeFromNum(n int) (ProductType, error) {
+	switch n {
+	case 1:
+		return PRODUCTFUEL, nil
+	case 2:
+		return PRODUCTORG, nil
+	case 3:
+		return PRODUCTEQU, nil
+	}
+	return PRODUCTNONE, fmt.Errorf("invalid product type %d", n)
+}
