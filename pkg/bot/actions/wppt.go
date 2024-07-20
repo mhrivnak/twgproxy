@@ -8,6 +8,7 @@ import (
 	"math/rand"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
+	localcontext "github.com/mhrivnak/twgproxy/pkg/bot/context"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
 	"github.com/mhrivnak/twgproxy/pkg/models/persist"
@@ -93,6 +94,9 @@ func (p *wppt) trade(ctx context.Context, plan *tradePlan, current, next *models
 }
 
 func (p *wppt) port(ctx context.Context, plan *tradePlan, current *models.Sector, lastTime bool) {
+	ctx, cancel := context.WithCancel(localcontext.NewChild(ctx))
+	defer cancel()
+
 	p.actuator.Send("pt")
 
 	// sell if product onboard, else buy
@@ -198,19 +202,29 @@ func (p *wppt) run(ctx context.Context) {
 
 	currentSectorID := p.actuator.Data.Status.Sector
 
+	var childCtx context.Context
+	var cancelFunc context.CancelFunc
+
 	for {
 		if ctx.Err() != nil {
 			return
 		}
+
+		// cancel the prior iteration's context
+		if cancelFunc != nil {
+			cancelFunc()
+		}
+		childCtx, cancelFunc = context.WithCancel(localcontext.NewChild(ctx))
+		defer cancelFunc()
 
 		// holo-scan
 		p.actuator.Send("sh")
 
 		// wait for the sectors to be parsed
 		select {
-		case <-ctx.Done():
+		case <-childCtx.Done():
 			return
-		case <-p.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(currentSectorID)):
+		case <-p.actuator.Broker.WaitFor(childCtx, events.SECTORDISPLAY, fmt.Sprint(currentSectorID)):
 		}
 
 		visited[currentSectorID] = struct{}{}
@@ -226,9 +240,9 @@ func (p *wppt) run(ctx context.Context) {
 			p.actuator.Send("cr\rq")
 
 			select {
-			case <-ctx.Done():
+			case <-childCtx.Done():
 				return
-			case <-p.actuator.Broker.WaitFor(ctx, events.PORTREPORTDISPLAY, ""):
+			case <-p.actuator.Broker.WaitFor(childCtx, events.PORTREPORTDISPLAY, ""):
 			}
 
 			// re-fetch current sector
@@ -276,7 +290,7 @@ func (p *wppt) run(ctx context.Context) {
 					// make sure there's a direct warp back to the current sector
 					_, ok = p.actuator.Data.Persist.WarpCache.Get(neighborID)
 					if !ok {
-						p.actuator.QueryWarps(ctx, neighborID, true)
+						p.actuator.QueryWarps(childCtx, neighborID, true)
 					}
 					_, ok = p.actuator.Data.Persist.WarpCache.Get(neighborID)
 					if !ok {
@@ -298,9 +312,9 @@ func (p *wppt) run(ctx context.Context) {
 					p.actuator.Sendf("cr%d\rq", neighborID)
 
 					select {
-					case <-ctx.Done():
+					case <-childCtx.Done():
 						return
-					case <-p.actuator.Broker.WaitFor(ctx, events.PORTREPORTDISPLAY, fmt.Sprint(neighborID)):
+					case <-p.actuator.Broker.WaitFor(childCtx, events.PORTREPORTDISPLAY, fmt.Sprint(neighborID)):
 					}
 
 					if p.canConsiderPort(neighbor, savedNeighbor) {
@@ -338,7 +352,7 @@ func (p *wppt) run(ctx context.Context) {
 				fmt.Println(string(out))
 
 				neighbor, _ := p.actuator.Data.GetSector(bestPlanKey)
-				p.trade(ctx, plans[bestPlanKey], current, neighbor)
+				p.trade(childCtx, plans[bestPlanKey], current, neighbor)
 				fmt.Println("DONE TRADING PAIR")
 			}
 		}
@@ -389,7 +403,7 @@ func (p *wppt) run(ctx context.Context) {
 			next = safeHops[rand.Intn(len(safeHops))]
 		}
 
-		p.actuator.Move(ctx, next, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
+		p.actuator.Move(childCtx, next, actuator.MoveOptions{DropFigs: 1, MinFigs: 100}, false)
 		currentSectorID = next
 	}
 

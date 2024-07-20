@@ -11,13 +11,15 @@ import (
 	"strconv"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"github.com/mhrivnak/twgproxy/pkg/bot/actions"
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
+	localcontext "github.com/mhrivnak/twgproxy/pkg/bot/context"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/bot/listeners"
 	"github.com/mhrivnak/twgproxy/pkg/bot/parsers"
 	"github.com/mhrivnak/twgproxy/pkg/models"
-	"gorm.io/gorm"
 )
 
 type Bot struct {
@@ -219,8 +221,9 @@ func (b *Bot) Start(userReader io.Reader, userWriter io.Writer, done chan<- inte
 // runAction runs the action until it completes, unless the user cancels it by
 // pressing "x".
 func (b *Bot) runAction(action actions.Action, input <-chan byte) {
-	ctx, cancelCtx := context.WithCancel(context.Background())
+	ctx, cancelCtx := context.WithCancel(localcontext.NewContext())
 	defer cancelCtx()
+
 	actionDone := action.Start(ctx)
 	for {
 		select {

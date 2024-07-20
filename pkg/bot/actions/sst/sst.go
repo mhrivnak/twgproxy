@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
+	localcontext "github.com/mhrivnak/twgproxy/pkg/bot/context"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
 )
@@ -82,6 +83,9 @@ func (s *SST) preparePort(ctx context.Context) error {
 }
 
 func (s *SST) sell(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(localcontext.NewChild(ctx))
+	defer cancel()
+
 	s.actuator.Send("pt")
 
 	select {
@@ -121,6 +125,9 @@ func (s *SST) sell(ctx context.Context) error {
 }
 
 func (s *SST) steal(ctx context.Context) (bool, error) {
+	ctx, cancel := context.WithCancel(localcontext.NewChild(ctx))
+	defer cancel()
+
 	holds := s.actuator.Data.Status.Holds
 
 	holdsToSteal := min(holds, s.actuator.Data.Status.Exp/30)

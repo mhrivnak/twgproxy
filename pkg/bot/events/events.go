@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	localcontext "github.com/mhrivnak/twgproxy/pkg/bot/context"
 )
 
 type EventKind string
@@ -94,12 +96,13 @@ type Wait struct {
 
 type waitSlice []Wait
 
+// waitMap groups waits by their ID
 type waitMap map[string]waitSlice
 
 func NewBroker() *Broker {
 	return &Broker{
 		listeners: map[EventKind][]func(*Event){},
-		waits:     map[EventKind]waitMap{},
+		waits:     map[string]map[EventKind]waitMap{},
 	}
 }
 
@@ -107,7 +110,24 @@ type Broker struct {
 	listenerLock sync.Mutex
 	waitLock     sync.Mutex
 	listeners    map[EventKind][]func(*Event)
-	waits        map[EventKind]waitMap
+
+	// waits are organized first as a map of group ID, which is an ID pulled off
+	// of the context when a wait is created. That makes it easy to prune all of
+	// the leftover waits when a section of code no longer needs them. The second
+	// map groups waits by their event kind.
+	waits map[string]map[EventKind]waitMap
+}
+
+// prune removes all waits that were created with the given context
+func (b *Broker) prune(ctx context.Context) {
+	b.waitLock.Lock()
+	defer b.waitLock.Unlock()
+
+	groupID := localcontext.IDFromContext(ctx)
+	if groupID != "" {
+		fmt.Printf("pruning wait group: %s\n", groupID)
+		delete(b.waits, groupID)
+	}
 }
 
 func (b *Broker) Publish(e *Event) {
@@ -150,9 +170,11 @@ func (b *Broker) Waits() []Wait {
 	b.waitLock.Lock()
 	defer b.waitLock.Unlock()
 
-	for _, wm := range b.waits {
-		for _, w := range wm {
-			ret = append(ret, w...)
+	for _, group := range b.waits {
+		for _, wm := range group {
+			for _, w := range wm {
+				ret = append(ret, w...)
+			}
 		}
 	}
 
@@ -161,16 +183,30 @@ func (b *Broker) Waits() []Wait {
 
 func (b *Broker) WaitFor(ctx context.Context, kind EventKind, id string) <-chan *Event {
 	if b.waits == nil {
-		b.waits = map[EventKind]waitMap{}
+		b.waits = map[string]map[EventKind]waitMap{}
 	}
+
+	groupID := localcontext.IDFromContext(ctx)
 
 	b.waitLock.Lock()
 	defer b.waitLock.Unlock()
 
-	wm, ok := b.waits[kind]
+	group, ok := b.waits[groupID]
+	if !ok {
+		b.waits[groupID] = map[EventKind]waitMap{}
+		group = b.waits[groupID]
+		if groupID != "" {
+			// once the context is cancelled, prune the wait group
+			go func() {
+				<-ctx.Done()
+				b.prune(ctx)
+			}()
+		}
+	}
+	wm, ok := group[kind]
 	if !ok {
 		wm = make(waitMap)
-		b.waits[kind] = wm
+		group[kind] = wm
 	}
 
 	// size 1 so an event can be sent even if the receiver is no longer waiting
@@ -190,20 +226,22 @@ func (b *Broker) getWaits(kind EventKind, id string) []Wait {
 	b.waitLock.Lock()
 	defer b.waitLock.Unlock()
 
-	wm, ok := b.waits[kind]
-	if !ok {
-		return ret
-	}
+	for _, group := range b.waits {
+		wm, ok := group[kind]
+		if !ok {
+			continue
+		}
 
-	wSlice, ok := wm[id]
-	if ok {
-		ret = append(ret, wSlice...)
-		delete(wm, id)
-	}
-	globalWaitSlice, ok := wm[""]
-	if ok {
-		ret = append(ret, globalWaitSlice...)
-		delete(wm, "")
+		wSlice, ok := wm[id]
+		if ok {
+			ret = append(ret, wSlice...)
+			delete(wm, id)
+		}
+		globalWaitSlice, ok := wm[""]
+		if ok {
+			ret = append(ret, globalWaitSlice...)
+			delete(wm, "")
+		}
 	}
 
 	return ret

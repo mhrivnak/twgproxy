@@ -7,6 +7,7 @@ import (
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actions/sst"
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
+	localcontext "github.com/mhrivnak/twgproxy/pkg/bot/context"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
 )
@@ -130,10 +131,20 @@ func (w *wsste) run(ctx context.Context) {
 			w.escortMoveOptions, &w.traderMoveOptions)
 	}
 
+	var childCtx context.Context
+	var cancelFunc context.CancelFunc
+
 	for {
 		if ctx.Err() != nil {
 			return
 		}
+
+		// cancel the prior iteration's context
+		if cancelFunc != nil {
+			cancelFunc()
+		}
+		childCtx, cancelFunc = context.WithCancel(localcontext.NewChild(ctx))
+		defer cancelFunc()
 
 		// update ship sectors
 		currentSectorID = w.actuator.Data.Status.Sector
@@ -146,20 +157,20 @@ func (w *wsste) run(ctx context.Context) {
 		w.actuator.Send("sh")
 		// wait for the sectors to be parsed
 		select {
-		case <-ctx.Done():
+		case <-childCtx.Done():
 			return
-		case <-w.actuator.Broker.WaitFor(ctx, events.SECTORDISPLAY, fmt.Sprint(currentSectorID)):
+		case <-w.actuator.Broker.WaitFor(childCtx, events.SECTORDISPLAY, fmt.Sprint(currentSectorID)):
 		}
 
 		// find a port pair to use
-		err, sectA, sectB := sst.FindPorts(ctx, w.actuator, w.escortMoveOptions,
+		err, sectA, sectB := sst.FindPorts(childCtx, w.actuator, w.escortMoveOptions,
 			w.xportRange, w.shipPairCurrent.escort.ID, w.shipPairOther.escort.sector, w.moveShips)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
-		err = w.updateShipInfo(ctx)
+		err = w.updateShipInfo(childCtx)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
@@ -167,7 +178,7 @@ func (w *wsste) run(ctx context.Context) {
 
 		// make sure we're in the same sector as the trader
 		if w.shipPairCurrent.escort.sector != w.shipPairCurrent.trader.sector {
-			err = w.actuator.Move(ctx, w.shipPairCurrent.trader.sector, w.escortMoveOptions, false)
+			err = w.actuator.Move(childCtx, w.shipPairCurrent.trader.sector, w.escortMoveOptions, false)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -176,7 +187,7 @@ func (w *wsste) run(ctx context.Context) {
 
 		// move one pair to sectA
 		if w.shipPairCurrent.trader.sector != sectA {
-			err = w.actuator.MoveWith(ctx, sectA, w.shipPairCurrent.trader.ID, w.escortMoveOptions, &w.traderMoveOptions)
+			err = w.actuator.MoveWith(childCtx, sectA, w.shipPairCurrent.trader.ID, w.escortMoveOptions, &w.traderMoveOptions)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -184,9 +195,9 @@ func (w *wsste) run(ctx context.Context) {
 			w.shipPairCurrent.escort.sector = sectA
 			w.shipPairCurrent.trader.sector = sectA
 		}
-		w.deployDefenses(ctx)
+		w.deployDefenses(childCtx)
 
-		err = w.actuator.Transport(ctx, w.shipPairOther.escort.ID)
+		err = w.actuator.Transport(childCtx, w.shipPairOther.escort.ID)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
@@ -195,7 +206,7 @@ func (w *wsste) run(ctx context.Context) {
 
 		// move one pair to sectB
 		if w.shipPairCurrent.trader.sector != sectB {
-			err = w.actuator.MoveWith(ctx, sectB, w.shipPairCurrent.trader.ID, w.escortMoveOptions, &w.traderMoveOptions)
+			err = w.actuator.MoveWith(childCtx, sectB, w.shipPairCurrent.trader.ID, w.escortMoveOptions, &w.traderMoveOptions)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -203,17 +214,17 @@ func (w *wsste) run(ctx context.Context) {
 			w.shipPairCurrent.escort.sector = sectB
 			w.shipPairCurrent.trader.sector = sectB
 		}
-		w.deployDefenses(ctx)
+		w.deployDefenses(childCtx)
 
 		// get in the trader
-		err = w.actuator.Transport(ctx, w.shipPairCurrent.trader.ID)
+		err = w.actuator.Transport(childCtx, w.shipPairCurrent.trader.ID)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
 		sstRun := sst.New(w.actuator, w.shipPairCurrent.trader.ID, w.shipPairOther.trader.ID)
-		err = sstRun.Run(ctx)
+		err = sstRun.Run(childCtx)
 		if err != nil {
 			fmt.Printf("error during SST: %s\n", err.Error())
 			return
@@ -225,55 +236,55 @@ func (w *wsste) run(ctx context.Context) {
 		}
 
 		// get in the other escort to retrieve defenses
-		err = w.actuator.Transport(ctx, w.shipPairOther.escort.ID)
+		err = w.actuator.Transport(childCtx, w.shipPairOther.escort.ID)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
-		w.retrieveDefenses(ctx)
+		w.retrieveDefenses(childCtx)
 
 		// get in the current escort to retrieve defenses
-		err = w.actuator.Transport(ctx, w.shipPairCurrent.escort.ID)
+		err = w.actuator.Transport(childCtx, w.shipPairCurrent.escort.ID)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
-		w.retrieveDefenses(ctx)
+		w.retrieveDefenses(childCtx)
 
 		if !sstRun.Busted() {
 			return
 		}
 
-		err = w.actuator.MoveWith(ctx, 1, w.shipPairCurrent.trader.ID, w.escortMoveOptions, nil)
+		err = w.actuator.MoveWith(childCtx, 1, w.shipPairCurrent.trader.ID, w.escortMoveOptions, nil)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
 		// refurb the escort
-		err = sst.Refurb(ctx, w.actuator)
+		err = sst.Refurb(childCtx, w.actuator)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
-		err = w.actuator.Transport(ctx, w.shipPairCurrent.trader.ID)
+		err = w.actuator.Transport(childCtx, w.shipPairCurrent.trader.ID)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
-		w.actuator.QuickStats(ctx)
+		w.actuator.QuickStats(childCtx)
 
 		// refurb the trader
-		err = sst.Refurb(ctx, w.actuator)
+		err = sst.Refurb(childCtx, w.actuator)
 		if err != nil {
 			fmt.Println(err.Error())
 			// best effort transport to the escort
-			w.actuator.Transport(ctx, w.shipPairCurrent.escort.ID)
+			w.actuator.Transport(childCtx, w.shipPairCurrent.escort.ID)
 			return
 		}
 
-		err = w.actuator.Transport(ctx, w.shipPairCurrent.escort.ID)
+		err = w.actuator.Transport(childCtx, w.shipPairCurrent.escort.ID)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
@@ -286,19 +297,19 @@ func (w *wsste) run(ctx context.Context) {
 		expShortfall := 30*w.holds - w.actuator.Data.Status.Exp
 		if expShortfall > 0 {
 			fmt.Printf("need %d exp\n", expShortfall)
-			err = w.actuator.MoveWith(ctx, w.actuator.Data.Status.StarDock, w.shipPairCurrent.trader.ID, w.escortMoveOptions, nil)
+			err = w.actuator.MoveWith(childCtx, w.actuator.Data.Status.StarDock, w.shipPairCurrent.trader.ID, w.escortMoveOptions, nil)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
 			}
-			err = w.actuator.BustPlanets(ctx, expShortfall)
+			err = w.actuator.BustPlanets(childCtx, expShortfall)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
 			}
 		}
 
-		err = w.actuator.MoveWith(ctx, w.shipPairOther.escort.sector, w.shipPairCurrent.trader.ID, w.escortMoveOptions, &w.traderMoveOptions)
+		err = w.actuator.MoveWith(childCtx, w.shipPairOther.escort.sector, w.shipPairCurrent.trader.ID, w.escortMoveOptions, &w.traderMoveOptions)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
