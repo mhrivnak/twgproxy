@@ -2,17 +2,21 @@ package actuator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
 	"github.com/mhrivnak/twgproxy/pkg/models"
 	"github.com/mhrivnak/twgproxy/pkg/models/persist"
 )
+
+var errBlindJump = fmt.Errorf("blind jump")
 
 func New(broker *events.Broker, data *models.Data, writer io.Writer) *Actuator {
 	return &Actuator{
@@ -172,6 +176,7 @@ type MoveOptions struct {
 	RefurbAndReturn bool
 	AutoAvoid       bool
 	BuyProduct      models.ProductType
+	TWarpEnabled    bool
 }
 
 func (m MoveOptions) WithoutRefurbAndReturn() MoveOptions {
@@ -342,6 +347,63 @@ func (a *Actuator) NextMoveByTransportRange(ctx context.Context, xportRange int,
 	return 0, nil
 }
 
+func (a *Actuator) GetTwarpPower(ctx context.Context) (int, int) {
+	var type1, type2 int
+	var wg sync.WaitGroup
+	var level int
+
+	switch a.Data.Status.TWarp {
+	case models.TWarpTypeNone:
+		return 0, 0
+	case models.TWarpType1:
+		level = 1
+	case models.TWarpType2:
+		level = 2
+	}
+
+	if level >= 1 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-a.Broker.WaitFor(ctx, events.TWARPPOWERTYPE1, ""):
+				type1 = e.DataInt
+			}
+		}()
+	}
+	if level >= 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-a.Broker.WaitFor(ctx, events.TWARPPOWERTYPE2, ""):
+				type2 = e.DataInt
+			}
+		}()
+	}
+
+	a.Send("i")
+	wg.Wait()
+
+	return type1, type2
+}
+
+func (a *Actuator) IsFedSpace(sector int) bool {
+	if sector <= 10 {
+		return true
+	}
+	if a.Data.Status.StarDock == sector {
+		return true
+	}
+	return false
+}
+
 func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block bool) error {
 	// make sure we know what kind of long range scanner is available
 	a.QuickStats(ctx)
@@ -358,20 +420,39 @@ func (a *Actuator) Move(ctx context.Context, dest int, opts MoveOptions, block b
 		return err
 	}
 
-	stop := make(chan interface{})
-	defer close(stop)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-stop:
-				return
-			case <-a.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.MINEDSECTORPROMPT):
-				a.Send("\r")
+	if opts.TWarpEnabled && len(sectors) > 2 {
+		twarpPowerType1, _ := a.GetTwarpPower(ctx)
+		for i := len(sectors) - 1; i > 0; i-- {
+			s := sectors[i]
+			if a.IsFedSpace(s) && a.Data.Status.Alignment < 100 {
+				fmt.Printf("sector %d is in fed space\n", s)
+				continue
 			}
+			if twarpPowerType1 < len(sectors[:i]) {
+				fmt.Printf("sector %d too far for twarp\n", s)
+				continue
+			}
+
+			err := a.Twarp(ctx, s)
+			if errors.Is(err, errBlindJump) {
+				fmt.Printf("sector %d would be a blind jump\n", s)
+				continue
+			}
+			if err != nil {
+				fmt.Println(err.Error())
+				return err
+			}
+
+			// we made it! return
+			if s == dest {
+				return nil
+			}
+
+			// traditional move the rest of the way
+			sectors = sectors[i:]
+			break
 		}
-	}()
+	}
 
 	// ignore the first sector, which is the one we're in
 	for _, sector := range sectors[1:] {
@@ -732,8 +813,13 @@ func (a *Actuator) GoToSD(ctx context.Context) error {
 		a.Land(hop.Planet)
 		a.Send("t\r\r1\rq")
 	}
-	a.MoveSafe(ctx, a.Data.Status.StarDock, false)
-	return nil
+	moveOpts := MoveOptions{
+		TWarpEnabled: true,
+		BuyProduct:   models.PRODUCTFUEL,
+		DropFigs:     1,
+		EnemyFigsMax: 6000,
+	}
+	return a.Move(ctx, a.Data.Status.StarDock, moveOpts, false)
 }
 
 // GetPortReport returns nil, nil if a port report is not available for the sector.
@@ -787,8 +873,8 @@ func (a *Actuator) Twarp(ctx context.Context, destination int) error {
 		return ctx.Err()
 	case <-a.Broker.WaitFor(ctx, events.BLINDJUMP, ""):
 		a.Send("n")
-		return fmt.Errorf("aborting due to blind jump")
-	case <-a.Broker.WaitFor(ctx, events.BLINDJUMP, ""):
+		return errBlindJump
+	case <-a.Broker.WaitFor(ctx, events.TWARPLOWFUEL, ""):
 		return fmt.Errorf("not enough fuel for the jump")
 	case <-a.Broker.WaitFor(ctx, events.TWARPLOCKED, ""):
 		a.Send("y")

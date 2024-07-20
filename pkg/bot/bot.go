@@ -60,6 +60,8 @@ var figsDestroyed *regexp.Regexp = regexp.MustCompile(`([0-9]+) K3-A Fighters de
 var youHaveCreds *regexp.Regexp = regexp.MustCompile(`You have ([0-9,]+) credits and [0-9]+ empty cargo holds.`)
 var minesAllDestroyed *regexp.Regexp = regexp.MustCompile(`You destroyed all ([0-9]+) of the mines in sector`)
 var minesDestroyed *regexp.Regexp = regexp.MustCompile(`You destroyed ([0-9]+) of the mines in sector [0-9]+! \(([0-9]+) remain\)`)
+var twarpPowerType1 *regexp.Regexp = regexp.MustCompile(`  \(Type 1 Jump\): ([0-9]+) hops`)
+var twarpPowerType2 *regexp.Regexp = regexp.MustCompile(`  \(Type 2 Jump\): ([0-9]+) hops`)
 
 func byteChan(r io.Reader) <-chan byte {
 	c := make(chan byte)
@@ -784,6 +786,32 @@ func (b *Bot) ParseLine(line string) string {
 			b.Broker.Publish(&events.Event{
 				Kind:    events.MINESDESTROYED,
 				DataInt: remaining,
+			})
+		}
+	case strings.HasPrefix(clean, "  (Type 1 Jump):"):
+		parts := twarpPowerType1.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			power, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Printf("failed to parse warp power: %s\n", err)
+				return ""
+			}
+			b.Broker.Publish(&events.Event{
+				Kind:    events.TWARPPOWERTYPE1,
+				DataInt: power,
+			})
+		}
+	case strings.HasPrefix(clean, "  (Type 2 Jump):"):
+		parts := twarpPowerType2.FindStringSubmatch(clean)
+		if len(parts) == 2 {
+			power, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Printf("failed to parse warp power: %s\n", err)
+				return ""
+			}
+			b.Broker.Publish(&events.Event{
+				Kind:    events.TWARPPOWERTYPE2,
+				DataInt: power,
 			})
 		}
 	}

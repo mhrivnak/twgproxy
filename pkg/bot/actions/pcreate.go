@@ -6,6 +6,7 @@ import (
 
 	"github.com/mhrivnak/twgproxy/pkg/bot/actuator"
 	"github.com/mhrivnak/twgproxy/pkg/bot/events"
+	"github.com/mhrivnak/twgproxy/pkg/models"
 )
 
 type pCreate struct {
@@ -81,10 +82,18 @@ func (p *pCreate) run(ctx context.Context) {
 }
 
 func (p *pCreate) replenish(ctx context.Context) error {
+	moveOpts := actuator.MoveOptions{
+		TWarpEnabled: true,
+		BuyProduct:   models.PRODUCTFUEL,
+		EnemyFigsMax: 6000,
+		DropFigs:     1,
+	}
+
 	sector := p.actuator.Data.Status.Sector
 	p.actuator.GoToSD(ctx)
 	p.actuator.BuyGTorpsAndDetonators(ctx)
+	p.actuator.BuyProduct(ctx, models.PRODUCTFUEL)
 	// request quick stats so the status gets updated with replenished values
 	p.actuator.Send("/")
-	return p.actuator.MoveSafe(ctx, sector, false)
+	return p.actuator.Move(ctx, sector, moveOpts, false)
 }

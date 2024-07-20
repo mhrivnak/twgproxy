@@ -50,6 +50,8 @@ const (
 	STEALRESULT           EventKind = "steal result"
 	TWARPLOCKED           EventKind = "twarp locked"
 	TWARPLOWFUEL          EventKind = "twarp not enough fuel"
+	TWARPPOWERTYPE1       EventKind = "twarp power type 1"
+	TWARPPOWERTYPE2       EventKind = "twarp power type 2"
 	TWXSCRIPTTERM         EventKind = "twx script terminated"
 	WARPSINTOSECTOR       EventKind = "warps into sector"
 	XPORTRANGE            EventKind = "xport range"
