@@ -688,6 +688,8 @@ func (b *Bot) ParseLine(line string) string {
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	case strings.Contains(clean, "HA!  You crack me up.  Now get lost."):
 		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
+	case strings.Contains(clean, "Thief!  I will not do business with you."):
+		b.Broker.Publish(&events.Event{Kind: events.PORTNOTINTERESTED})
 	case strings.Contains(clean, "<Transport to Ship>"):
 		b.parsers[parsers.AVAILABLESHIPS] = parsers.NewParseXportRange(b.Broker, b.data)
 	case strings.Contains(clean, "--<  Available Ship Scan  >--"):
