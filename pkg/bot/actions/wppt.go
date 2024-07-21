@@ -33,10 +33,10 @@ func (p *wppt) Start(ctx context.Context) <-chan struct{} {
 }
 
 func (p *wppt) canConsiderPort(sector *models.Sector, saved *persist.Sector) bool {
-	report := sector.Port.Report
 	if sector == nil || sector.Port == nil || sector.Port.Report == nil {
 		return false
 	}
+	report := sector.Port.Report
 
 	switch {
 	case report.Equ.Percent < 80:
@@ -54,7 +54,7 @@ func (p *wppt) canConsiderPort(sector *models.Sector, saved *persist.Sector) boo
 	return true
 }
 
-func (p *wppt) sendBuy0(ctx context.Context, sector *models.Sector) {
+func (p *wppt) sendBuy0(sector *models.Sector) {
 	if sector.Port == nil {
 		fmt.Println("unexpected nil port info")
 		// fall back to sending three 0s. Extras won't hurt.
@@ -106,14 +106,14 @@ func (p *wppt) port(ctx context.Context, plan *tradePlan, current *models.Sector
 	case <-p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.SELLPROMPT):
 		// sell all
 		p.actuator.Send("\r")
-	case e := <-p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.BUYPROMPT):
+	case <-p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.BUYPROMPT):
 		fmt.Println("got buy prompt right away")
 		if lastTime {
 			fmt.Println("done trading this pair")
-			p.sendBuy0(ctx, current)
+			p.sendBuy0(current)
 			return
 		}
-		if p.buy(ctx, plan, current, e) {
+		if p.buy(ctx, plan, current) {
 			p.port(ctx, plan, current, lastTime)
 		}
 		return
@@ -132,13 +132,13 @@ func (p *wppt) port(ctx context.Context, plan *tradePlan, current *models.Sector
 		return
 	case <-p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.COMMANDPROMPT):
 		return
-	case e := <-p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.BUYPROMPT):
+	case <-p.actuator.Broker.WaitFor(ctx, events.PROMPTDISPLAY, events.BUYPROMPT):
 		if lastTime {
 			fmt.Println("done trading this pair")
-			p.sendBuy0(ctx, current)
+			p.sendBuy0(current)
 			return
 		}
-		if p.buy(ctx, plan, current, e) {
+		if p.buy(ctx, plan, current) {
 			p.port(ctx, plan, current, lastTime)
 		}
 	}
@@ -147,7 +147,7 @@ func (p *wppt) port(ctx context.Context, plan *tradePlan, current *models.Sector
 // buy responds to the first buy prompt a port presents after docking. return
 // value indicates if the port and trade operation should be tried again,
 // usually because in negotiation, the port says they were not interested.
-func (p *wppt) buy(ctx context.Context, plan *tradePlan, sector *models.Sector, e *events.Event) bool {
+func (p *wppt) buy(ctx context.Context, plan *tradePlan, sector *models.Sector) bool {
 	output := ""
 	rep := sector.Port.Report
 
@@ -522,18 +522,6 @@ type tradePlan struct {
 	NumTrades int
 
 	Score int
-}
-
-func (t *tradePlan) otherSector(sectorID int) int {
-	switch {
-	case t.BuyFuelFrom != 0 && t.BuyFuelFrom != sectorID:
-		return t.BuyFuelFrom
-	case t.BuyOrgFrom != 0 && t.BuyOrgFrom != sectorID:
-		return t.BuyOrgFrom
-	case t.BuyEquFrom != 0 && t.BuyEquFrom != sectorID:
-		return t.BuyEquFrom
-	}
-	return 0
 }
 
 func (t *tradePlan) addScore() {

@@ -195,7 +195,7 @@ func (w *wsste) run(ctx context.Context) {
 			w.shipPairCurrent.escort.sector = sectA
 			w.shipPairCurrent.trader.sector = sectA
 		}
-		w.deployDefenses(childCtx)
+		w.deployDefenses()
 
 		err = w.actuator.Transport(childCtx, w.shipPairOther.escort.ID)
 		if err != nil {
@@ -214,7 +214,7 @@ func (w *wsste) run(ctx context.Context) {
 			w.shipPairCurrent.escort.sector = sectB
 			w.shipPairCurrent.trader.sector = sectB
 		}
-		w.deployDefenses(childCtx)
+		w.deployDefenses()
 
 		// get in the trader
 		err = w.actuator.Transport(childCtx, w.shipPairCurrent.trader.ID)
@@ -241,7 +241,7 @@ func (w *wsste) run(ctx context.Context) {
 			fmt.Println(err.Error())
 			return
 		}
-		w.retrieveDefenses(childCtx)
+		w.retrieveDefenses()
 
 		// get in the current escort to retrieve defenses
 		err = w.actuator.Transport(childCtx, w.shipPairCurrent.escort.ID)
@@ -249,7 +249,7 @@ func (w *wsste) run(ctx context.Context) {
 			fmt.Println(err.Error())
 			return
 		}
-		w.retrieveDefenses(childCtx)
+		w.retrieveDefenses()
 
 		if !sstRun.Busted() {
 			return
@@ -317,11 +317,11 @@ func (w *wsste) run(ctx context.Context) {
 	}
 }
 
-func (w *wsste) deployDefenses(ctx context.Context) {
+func (w *wsste) deployDefenses() {
 	w.actuator.Send("f10000\rcdh1100\rc")
 }
 
-func (w *wsste) retrieveDefenses(ctx context.Context) {
+func (w *wsste) retrieveDefenses() {
 	w.actuator.Send("f1\rcdh10\r")
 }
 

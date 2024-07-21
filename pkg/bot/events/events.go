@@ -147,7 +147,7 @@ func (b *Broker) Publish(e *Event) {
 	defer b.listenerLock.Unlock()
 
 	listeners := b.listeners[e.Kind]
-	for i, _ := range listeners {
+	for i := range listeners {
 		listeners[i](e)
 	}
 }
