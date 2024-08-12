@@ -1,6 +1,7 @@
 package parsers
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -12,8 +13,9 @@ func NewCIMWarpsParser(warpCache *persist.WarpCache) Parser {
 }
 
 type parseCIMWarps struct {
-	done      bool
-	warpCache *persist.WarpCache
+	done       bool
+	warpCache  *persist.WarpCache
+	addedCount int
 }
 
 func (p *parseCIMWarps) Parse(line string) error {
@@ -37,12 +39,18 @@ func (p *parseCIMWarps) Parse(line string) error {
 	if err != nil {
 		return err
 	}
-	p.warpCache.AddIfNeeded(from, to)
+
+	if p.warpCache.AddIfNeeded(from, to) {
+		p.addedCount += 1
+	}
 
 	return nil
 }
 
 func (p *parseCIMWarps) Done() bool {
+	if p.done {
+		fmt.Printf("CIM parser added warps for %d sectors\n", p.addedCount)
+	}
 	return p.done
 }
 

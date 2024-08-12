@@ -291,6 +291,7 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 	case byte('c'):
 		if len(command) > 1 {
 			switch command[1] {
+			// download CIM warp data and update stored warp data
 			case byte('w'):
 				b.parsers[parsers.CIMWARPS] = parsers.NewCIMWarpsParser(b.data.Persist.WarpCache)
 				return actions.NewCIMWarpUpdate(b.Actuator)

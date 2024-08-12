@@ -72,12 +72,12 @@ func (c *WarpCache) add(from, to int) {
 	c.Warps[from] = append(c.Warps[from], to)
 }
 
-func (c *WarpCache) AddIfNeeded(from int, destinations []int) {
+func (c *WarpCache) AddIfNeeded(from int, destinations []int) bool {
 	c.Lock()
 	defer c.Unlock()
 	_, ok := c.Warps[from]
 	if ok {
-		return
+		return false
 	}
 
 	for _, to := range destinations {
@@ -88,6 +88,7 @@ func (c *WarpCache) AddIfNeeded(from int, destinations []int) {
 		}
 		c.db.Save(&warp)
 	}
+	return true
 }
 
 // TrimExplored takes a slice of sectors and returns the ones for which we don't
