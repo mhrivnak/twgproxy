@@ -423,20 +423,47 @@ func (b *Bot) ParseCommand(command []byte) actions.Action {
 		}
 
 	case byte('m'):
+		// move-fight
 		if len(command) > 1 && command[1] == byte('f') {
-			dest, err := strconv.Atoi(string(command[2:]))
-			if err != nil {
-				fmt.Printf("failed to parse sector from command %s\n", string(command))
-				return nil
-			}
 			opts := actuator.MoveOptions{
 				DropFigs:      1,
 				MinFigs:       5000,
 				EnemyFigsMax:  1000,
 				EnemyMinesMax: 50,
 			}
+
+			// the index where we can find the destination sector
+			destIndex := 2
+
+			if len(command) < 3 {
+				fmt.Println("command mf missing destination")
+				return nil
+			}
+
+			// check if we want to buy product along the way
+			if command[2] == byte('+') {
+				if len(command) < 4 {
+					fmt.Println("command mf missing product type and destination")
+					return nil
+				}
+				destIndex += 2
+				product, err := models.ProductTypeFromChar(string(command[3]))
+				if err != nil {
+					fmt.Println("command mf unable to parse product type")
+					fmt.Println(err.Error())
+					return nil
+				}
+				opts.BuyProduct = product
+			}
+
+			dest, err := strconv.Atoi(string(command[destIndex:]))
+			if err != nil {
+				fmt.Printf("failed to parse sector from command %s\n", string(command))
+				return nil
+			}
 			return actions.NewMove(dest, opts, b.Actuator)
 		}
+		// move-with
 		if len(command) > 1 && command[1] == byte('w') {
 			opts := actuator.MoveOptions{
 				DropFigs:      1,
