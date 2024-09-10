@@ -291,6 +291,7 @@ func (w *wsste) run(ctx context.Context) {
 		}
 		// work-around for issues with the current ship status not being
 		// up-to-date at this point
+		w.actuator.QuickStatsSync(childCtx, w.shipPairCurrent.escort.ID)
 		time.Sleep(time.Second)
 
 		// if exp isn't enough
